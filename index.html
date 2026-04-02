@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>情報科 単語クイズ</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+         background: #f5f4f0; color: #1a1a18; min-height: 100vh; padding: 1.5rem 1rem 4rem; }
+  .wrap { max-width: 700px; margin: 0 auto; }
+
+  /* ===== 共通 ===== */
+  .quiz-header { margin-bottom: 1.25rem; }
+  .quiz-title  { font-size: 20px; font-weight: 500; }
+  .quiz-sub    { font-size: 13px; color: #6b6b68; margin-top: 4px; }
+  .card { background: #fff; border: 0.5px solid #e0dfd8; border-radius: 12px;
+          padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+  .btn { background: transparent; border: 0.5px solid #b4b2a9; border-radius: 8px;
+         padding: 8px 18px; font-size: 14px; color: #1a1a18; cursor: pointer;
+         font-family: inherit; transition: background 0.15s; }
+  .btn:hover:not(:disabled) { background: #f5f4f0; }
+  .btn:disabled { opacity: 0.35; cursor: default; }
+  .btn.primary { background: #378ADD; border-color: #378ADD; color: #fff; }
+  .btn.primary:hover:not(:disabled) { background: #185FA5; border-color: #185FA5; }
+
+  /* ===== 出席番号選択 ===== */
+  .ss-title { font-size: 20px; font-weight: 500; margin-bottom: 6px; }
+  .ss-sub   { font-size: 13px; color: #6b6b68; margin-bottom: 1.5rem; }
+  .ss-grid  { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 1.5rem; }
+  .ss-btn   { background: #fff; border: 0.5px solid #dddcd6; border-radius: 8px;
+              padding: 14px 0; font-size: 16px; font-weight: 500; color: #1a1a18;
+              cursor: pointer; text-align: center; transition: all 0.15s; font-family: inherit; }
+  .ss-btn:hover  { background: #EBF3FC; border-color: #378ADD; color: #378ADD; }
+  .ss-btn.sel    { background: #378ADD; border-color: #378ADD; color: #fff; }
+  .ss-btn.done   { border-color: #639922; color: #639922; }
+  .ss-btn.done.sel { background: #378ADD; border-color: #378ADD; color: #fff; }
+  .ss-start { width: 100%; padding: 12px; font-size: 15px; }
+
+  /* ===== プログレス ===== */
+  .progress-bg   { height: 4px; background: #dddcd6; border-radius: 2px; margin-bottom: 1.5rem; }
+  .progress-fill { height: 4px; background: #378ADD; border-radius: 2px; transition: width 0.4s ease; }
+
+  /* ===== クイズカード ===== */
+  .q-num      { font-size: 11px; font-weight: 500; color: #378ADD; letter-spacing: 0.06em; margin-bottom: 10px; }
+  .q-meaning  { font-size: 17px; font-weight: 500; line-height: 1.7; margin-bottom: 14px; }
+  .choices-5  { display: flex; flex-direction: column; gap: 8px; }
+  .choice-btn { background: #f5f4f0; border: 0.5px solid #dddcd6; border-radius: 8px;
+                padding: 10px 14px; font-size: 14px; color: #1a1a18; cursor: pointer;
+                text-align: left; transition: background 0.15s, border-color 0.15s; font-family: inherit; }
+  .choice-btn:hover:not(.disabled) { background: #fff; border-color: #b4b2a9; }
+  .choice-btn.correct  { background: #EAF3DE; border-color: #639922; color: #3B6D11; cursor: default; }
+  .choice-btn.wrong    { background: #FCEBEB; border-color: #E24B4A; color: #A32D2D; cursor: default; }
+  .choice-btn.disabled { cursor: default; }
+  .feedback { display: none; font-size: 13px; margin-top: 12px; padding: 8px 12px;
+              border-radius: 6px; line-height: 1.7; }
+  .feedback.show    { display: block; }
+  .feedback.correct { background: #EAF3DE; color: #3B6D11; }
+  .feedback.wrong   { background: #FCEBEB; color: #A32D2D; }
+  .nav-row  { display: flex; justify-content: flex-end; margin-top: 1rem; }
+  .q-counter { font-size: 13px; color: #6b6b68; }
+
+  /* ===== 結果 ===== */
+  .result-card  { background: #fff; border: 0.5px solid #e0dfd8; border-radius: 12px;
+                  padding: 2rem 1.5rem; text-align: center; }
+  .score-big    { font-size: 52px; font-weight: 500; color: #378ADD; line-height: 1; }
+  .score-denom  { font-size: 22px; color: #b4b2a9; }
+  .score-pct    { font-size: 14px; color: #6b6b68; margin-top: 6px; margin-bottom: 1rem; }
+  .score-msg    { font-size: 14px; line-height: 1.7; margin-bottom: 1.5rem; }
+  .review-list  { text-align: left; }
+  .review-item  { padding: 10px 0; border-top: 0.5px solid #e0dfd8; font-size: 13px;
+                  color: #6b6b68; line-height: 1.7; }
+  .review-row   { display: flex; align-items: flex-start; gap: 8px; }
+  .mark { display: inline-flex; align-items: center; justify-content: center;
+          width: 18px; height: 18px; border-radius: 50%; font-size: 11px;
+          font-weight: 500; flex-shrink: 0; margin-top: 3px; }
+  .mark.ok { background: #EAF3DE; color: #3B6D11; }
+  .mark.ng { background: #FCEBEB; color: #A32D2D; }
+  .ans-correct { color: #3B6D11; font-weight: 500; }
+  .ans-wrong   { color: #A32D2D; }
+  .sync-note { font-size: 12px; color: #6b6b68; margin-top: 0.5rem; }
+  .restart-btn { margin-top: 1.5rem; padding: 10px 24px; font-size: 14px; }
+
+  /* ===== 管理者 ===== */
+  #admin-wrap { display: none; }
+  .adm-title  { font-size: 18px; font-weight: 500; }
+  .adm-pass   { display: flex; gap: 8px; margin-bottom: 1rem; }
+  .adm-pass input { flex: 1; border: 0.5px solid #dddcd6; border-radius: 8px;
+                    padding: 8px 12px; font-size: 14px; font-family: inherit; outline: none; }
+  .adm-pass input:focus { border-color: #378ADD; }
+  .adm-tbl  { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .adm-tbl th { background: #f5f4f0; padding: 8px 10px; text-align: left;
+                border: 0.5px solid #e0dfd8; font-size: 12px; color: #6b6b68; }
+  .adm-tbl td { padding: 8px 10px; border: 0.5px solid #e0dfd8; vertical-align: top; }
+  .adm-tbl tr:nth-child(even) td { background: #faf9f6; }
+  .bar-bg   { width: 80px; height: 6px; background: #e0dfd8; border-radius: 3px;
+              display: inline-block; vertical-align: middle; }
+  .bar-fill { height: 6px; border-radius: 3px; display: block; }
+  .wrong-txt { font-size: 11px; color: #A32D2D; line-height: 1.8; }
+  .adm-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; }
+
+  .footer-note { position: fixed; bottom: 0; right: 0; left: 0;
+    background: rgba(245,244,240,0.92); backdrop-filter: blur(4px);
+    border-top: 0.5px solid #e0dfd8; padding: 6px 16px; font-size: 11px;
+    color: #888780; text-align: right; line-height: 1.6; z-index: 999; }
+  @media (max-width: 480px) { .ss-grid { grid-template-columns: repeat(5, 1fr); } }
+</style>
+</head>
+<body>
+
+<!-- ★ 出席番号選択 -->
+<div id="ss-wrap" class="wrap">
+  <div class="quiz-header">
+    <div class="ss-title">情報科 単語クイズ</div>
+    <div class="ss-sub">出席番号を選んでからスタートしてください（5択・全20問）</div>
+  </div>
+  <div class="card">
+    <div class="ss-grid" id="ss-grid"></div>
+    <button class="btn primary ss-start" id="ss-start-btn" onclick="startQuiz()" disabled>スタート →</button>
+  </div>
+  <div style="text-align:right; margin-top:10px;">
+    <button style="background:none;border:none;color:#378ADD;font-size:12px;cursor:pointer;text-decoration:underline;font-family:inherit;" onclick="showAdmin()">管理者ページ</button>
+  </div>
+</div>
+
+<!-- ★ クイズ画面 -->
+<div id="quiz-wrap" class="wrap" style="display:none;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+    <span id="student-badge" style="font-size:13px;font-weight:500;color:#378ADD;"></span>
+    <button style="background:none;border:none;font-size:12px;color:#888780;cursor:pointer;font-family:inherit;" onclick="backToSelect()">← 出席番号選択に戻る</button>
+  </div>
+  <div class="progress-bg"><div class="progress-fill" id="prog" style="width:5%"></div></div>
+  <div id="quiz-body"></div>
+  <div class="nav-row" id="nav-row" style="display:none;">
+    <span class="q-counter" id="q-counter"></span>
+    &nbsp;&nbsp;
+    <button class="btn primary" id="next-btn" onclick="nextQ()">次へ →</button>
+  </div>
+</div>
+
+<!-- ★ 管理者画面 -->
+<div id="admin-wrap" class="wrap">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
+    <span class="adm-title">📊 管理者ページ</span>
+    <button class="btn" onclick="hideAdmin()">← 生徒画面に戻る</button>
+  </div>
+  <div id="adm-lock">
+    <div style="font-size:13px;color:#6b6b68;margin-bottom:8px;">管理者パスワードを入力してください</div>
+    <div class="adm-pass">
+      <input type="password" id="adm-pass-inp" placeholder="パスワード" onkeydown="if(event.key==='Enter')unlockAdmin()">
+      <button class="btn primary" onclick="unlockAdmin()">確認</button>
+    </div>
+    <div id="adm-err" style="font-size:12px;color:#A32D2D;display:none;">パスワードが違います</div>
+  </div>
+  <div id="adm-content" style="display:none;">
+    <div class="card" style="margin-bottom:1rem;">
+      <div style="font-size:13px;font-weight:500;margin-bottom:8px;">📡 Googleスプレッドシート連携</div>
+      <div style="font-size:12px;color:#6b6b68;margin-bottom:8px;">Apps Script のウェブアプリURLを入力すると、解答結果が自動でスプレッドシートに送信されます。</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="text" id="gas-url-input" placeholder="https://script.google.com/macros/s/.../exec"
+          style="flex:1;min-width:200px;border:0.5px solid #dddcd6;border-radius:8px;padding:8px 12px;font-size:12px;font-family:inherit;outline:none;">
+        <button class="btn primary" onclick="saveGasUrl()" style="font-size:13px;white-space:nowrap;">保存</button>
+        <button class="btn" onclick="testGasUrl()" style="font-size:13px;white-space:nowrap;">テスト送信</button>
+      </div>
+      <div id="gas-status" style="font-size:12px;margin-top:6px;"></div>
+    </div>
+    <div class="adm-actions">
+      <button class="btn" onclick="exportCSV()">📥 CSVダウンロード</button>
+      <button class="btn" onclick="clearData()" style="color:#A32D2D;border-color:#E24B4A;">🗑 全データ削除</button>
+    </div>
+    <div style="overflow-x:auto;"><table class="adm-tbl" id="adm-tbl"></table></div>
+  </div>
+</div>
+
+<div class="footer-note">問題は全教科書用語リスト（695語）からランダム出題されます。</div>
+
+<script>
+/* ================================================================
+   単語データ
+   ================================================================ */
+const VOCAB = [{"word_clean": "情報化社会", "meaning": "情報が大きな重みを持つ社会"}, {"word_clean": "Internet", "meaning": "IPを用いて情報を流通させる世界にまたがるネットワーク"}, {"word_clean": "メディアリテラシー", "meaning": "メディアを適切に使いこなす能力"}, {"word_clean": "マスメディア", "meaning": "多くの人に情報を伝達するメディア。新聞、雑誌、ラジオ、テレビ等"}, {"word_clean": "マスコミ", "meaning": "マスメディアを通じて多くの人に情報を伝達すること"}, {"word_clean": "メディア", "meaning": "情報を伝えたり保管・記録するもの"}, {"word_clean": "データ", "meaning": "情報を文字等の形で具体的に表現したものであり、情報として解釈可能なもの(注2.1)"}, {"word_clean": "情報", "meaning": "ものごとに対し知り得たことで、文脈により特定の意味を持つもの(注2.1）"}, {"word_clean": "情報源", "meaning": "情報の出どころ"}, {"word_clean": "残存性", "meaning": "情報の、よそに伝えても手元に残り続けるという性質"}, {"word_clean": "伝播性", "meaning": "情報の、ものに比べて伝わるのが速いという性質"}, {"word_clean": "複製性", "meaning": "情報の、複製が容易であるという性質"}, {"word_clean": "1次情報", "meaning": "起きたところから直接入手した情報"}, {"word_clean": "2次情報", "meaning": "間接的に／又聞きによって入手した情報"}, {"word_clean": "信ぴょう性", "meaning": "情報の信頼できる度合い"}, {"word_clean": "自己評価", "meaning": "自分の活動を自分で評価すること"}, {"word_clean": "PDCAサイクル", "meaning": "Plan、Do、Check、Actを反復して問題解決してゆく様"}, {"word_clean": "問題の解決", "meaning": "問題を解決すること"}, {"word_clean": "イメージマップ", "meaning": "頭の中にあるイメージを絵や図にしたもの"}, {"word_clean": "プランニングシート", "meaning": "計画を、図、写真、説明などを配置してまとめたもの"}, {"word_clean": "ブレインストーミング", "meaning": "アイデアを出すための話し合いで、なんでも思いついたことを言い批判はしないなどのルールがある"}, {"word_clean": "MECE", "meaning": "Mutually Exclusive、Collectively Exhaustive。重複せず漏れが無いように分解してゆくこと"}, {"word_clean": "レポート", "meaning": "ある事柄についてまとめた文書"}, {"word_clean": "プロジェクタ", "meaning": "コンピュータの画面などをスクリーンに投影する機器"}, {"word_clean": "ルーブリック", "meaning": "評価の観点(規準)と、その尺度を数段階に分けて記述語で示した評価基準とで構成される学習達成度評価（評価の基準から構成→評価基準とで構成[筧]）"}, {"word_clean": "協働", "meaning": "同じ目的のために複数の人が対等な立場で協力して働くこと"}, {"word_clean": "KJ法", "meaning": "アイデアをまとめる手法で、キーワードなどを紙に書いて配置してゆく"}, {"word_clean": "ロジックツリー", "meaning": "事柄に対して、問題や原因などをツリー状に書き出して問題解決する手法"}, {"word_clean": "PERT", "meaning": "タスク間の依存関係を表現する図法"}, {"word_clean": "ガントチャート", "meaning": "時間を横軸に、作業内容を縦軸に配した棒グラフ状の一覧表"}, {"word_clean": "検索エンジン", "meaning": "多数のWebサイトから関心のあるサイトを検索できるしくみ"}, {"word_clean": "アンケート", "meaning": "事柄についての意見や感想を決まった書式に記入するなどして集める調査手法"}, {"word_clean": "インタビュー", "meaning": "事柄についての意見や感想を対面で対象者から聞き取る調査手法"}, {"word_clean": "モラル", "meaning": "人が情報を扱う上で求められる道徳"}, {"word_clean": "ネットいじめ", "meaning": "ネット環境におけるいじめ"}, {"word_clean": "個人情報", "meaning": "生存するある個人に関する情報。ただし、その情報に含まれる記述等によりその個人を識別できるもの。(不完全な要約)(注2.2)"}, {"word_clean": "個人情報の保護に関する法律", "meaning": "個人情報データベース等を事業に使用している事業者が従うべき規則を定めた法律(注2.3)"}, {"word_clean": "基本4情報", "meaning": "氏名、性別、住所、生年月日の4つの情報"}, {"word_clean": "個人識別符号", "meaning": "特定の個人を識別できる文字、番号、記号その他の符号"}, {"word_clean": "要配慮個人情報", "meaning": "不当な差別や偏見その他の不利益が生じないよう特に配慮を要する個人情報"}, {"word_clean": "プライバシー", "meaning": "他人に知られたくない個人の私事"}, {"word_clean": "プライバシーの権利", "meaning": "他人に知られたくない個人の私事をみだりに開示・公表されない権利(注2.4)"}, {"word_clean": "肖像権", "meaning": "無断で写真を撮られたり、それを無断で公表・利用されることがない権利"}, {"word_clean": "パブリシティの権利", "meaning": "有名人が自己の氏名や肖像などについて対価を得て第三者に使用させ得る権利"}, {"word_clean": "プライバシーマーク", "meaning": "個人情報について適切な保護措置を講ずる体制を整備している事業者等であることを示すマーク"}, {"word_clean": "オプトアウト", "meaning": "ユーザーが情報を受け取る際や自らに関する情報を利用される際などに許諾しない意思を示す行為"}, {"word_clean": "忘れられる権利", "meaning": "記録にとどめられるべき正当な条件を持たない過去の個人にまつわる情報を削除する個人の権利"}, {"word_clean": "匿名性", "meaning": "本人の発言や行動により本人が不利益を被らないように本人の身元を隠すこと"}, {"word_clean": "無体財産", "meaning": "人間の知的活動によって生み出されたアイデアや創作物で財産的な価値を持つものをを総称して言う"}, {"word_clean": "無体財産権", "meaning": "知的財産に関する権利"}, {"word_clean": "工業所有権", "meaning": "知的財産権のうち、特許権、実用新案権、意匠権及び商標権の４つ"}, {"word_clean": "特許権", "meaning": "特許を受けた発明を独占的に実施することができる権利"}, {"word_clean": "実用新案権", "meaning": "物品の形状、構造または組み合わせに係る考案を保護するための権利"}, {"word_clean": "意匠権", "meaning": "工業デザインを守る権利"}, {"word_clean": "商標権", "meaning": "商品又はサービスについて使用する商標に対して与えられる独占排他権"}, {"word_clean": "著作権", "meaning": "思想又は感情を創作的に表現したものを著作物、それに関する権利を著作権という"}, {"word_clean": "著作権法", "meaning": "著作権について定める法律"}, {"word_clean": "著作者", "meaning": "著作物を作り出した人"}, {"word_clean": "著作物", "meaning": "著作権の保護対象。思想又は感情を創作的に表現したもの"}, {"word_clean": "著作人格権", "meaning": "著作権のうち、人格的な利益を保護する権利"}, {"word_clean": "公表権", "meaning": "著作者人格権の一つで、作品を公表するしかたを定められる権利"}, {"word_clean": "氏名表示権", "meaning": "著作者人格権の一つで、作品に氏名を表示するしかたを定められる権利"}, {"word_clean": "同一性保持権", "meaning": "著作者人格権の一つで、作品の同一性を保持させられる権利"}, {"word_clean": "著作権（財産権）", "meaning": "著作権のうち、著作者人格権以外のもの。狭義の著作権"}, {"word_clean": "複製権", "meaning": "著作権のうち、作品を複製する権利"}, {"word_clean": "上映権", "meaning": "著作権のうち、映画などを上映する権利"}, {"word_clean": "公衆送信権", "meaning": "著作権のうち、サーバー等に置いてネットに公開する権利"}, {"word_clean": "展示権", "meaning": "著作権のうち、作品を展示する権利"}, {"word_clean": "譲渡権", "meaning": "著作権のうち、映画以外の著作物の原作品や複製物を譲渡する権利"}, {"word_clean": "著作隣接権", "meaning": "著作物の伝達に重要な役割を果たす実演家、レコード製作者、放送事業者等に認められた権利"}, {"word_clean": "引用", "meaning": "正当な範囲内で著作物に他の著作物の一部を取り込むこと"}, {"word_clean": "CCライセンス", "meaning": "クリエイティブ・コモンズ活動が推奨する、6つの著作権表明のかたち"}, {"word_clean": "方式主義", "meaning": "著作物が著作権の保護を受けるために一定の方式を要する主義"}, {"word_clean": "無方式主義", "meaning": "著作物が著作権の保護を受けるためになんの方式も必要としない主義"}, {"word_clean": "可用性", "meaning": "情報セキュリティ3要素の1つで、情報が必要なときに利用できること"}, {"word_clean": "完全性", "meaning": "情報セキュリティ3要素の1つで、情報が失われたり改ざんされたりしないこと"}, {"word_clean": "機密性", "meaning": "情報セキュリティ3要素の1つで、情報が権利のない人に使われないこと"}, {"word_clean": "ソーシャルエンジニアリング", "meaning": "情報技術以外の方法で情報を不正入手すること"}, {"word_clean": "セキュリティアップデート", "meaning": "ソフトウェアの更新で、セキュリティ上の問題に対処するもの"}, {"word_clean": "アップデート", "meaning": "(1) ソフトウェアの更新 (2) 更新作業や更新データ"}, {"word_clean": "情報セキュリティ", "meaning": "情報に関する安全性"}, {"word_clean": "ディジタル署名", "meaning": "電子文書に対する本人性や非改ざん性を示す方式で、公開鍵暗号技術を用いたもの"}, {"word_clean": "アンチウィルスソフト", "meaning": "ウィルスなどのマルウェアを検出したりそれから防護するソフト"}, {"word_clean": "アカウント", "meaning": "PCなどを使用する個人に対応した単位。元はコンピュータの利用記録を取ったことからきた"}, {"word_clean": "ユーザID", "meaning": "PCなどを使用する個人に対応した番号等"}, {"word_clean": "パスワード", "meaning": "アカウントやユーザIDを勝手な使用から守る合言葉"}, {"word_clean": "認証", "meaning": "ユーザやホスト等が本人・本物であることを確認すること"}, {"word_clean": "個人認証", "meaning": "ユーザが誰であるかを確認すること"}, {"word_clean": "改ざん", "meaning": "情報を不当に書き換えること"}, {"word_clean": "生体認証", "meaning": "指紋や手の静脈などの生体情報を用いた認証"}, {"word_clean": "電子認証", "meaning": "確かに本人であることを認証局が電子的に証明する技術"}, {"word_clean": "2段階認証", "meaning": "認証を二段階異なる手段で行うこと"}, {"word_clean": "マルウェア", "meaning": "害をなす意図をもって作成されたソフトウェア"}, {"word_clean": "トロイの木馬", "meaning": "有益なものと見せかけてインストールさせ、実は害をなすマルウェア"}, {"word_clean": "ワーム", "meaning": "ネット経由で自分の複製を動かし増殖させるマルウェア"}, {"word_clean": "ウィルス", "meaning": "他のプログラムに自分のコピーを移植することで広まるマルウェア"}, {"word_clean": "スパイウェア", "meaning": "ユーザに気づかれずに個人情報・機密情報などを盗み出すマルウェア"}, {"word_clean": "ランサムウェア", "meaning": "重要な情報を暗号化し、復元には対価をと要求するタイプのマルウェア"}, {"word_clean": "キーロガー", "meaning": "キーボードの打鍵記録をとるソフトウェア。スパイウェアとして使われることも"}, {"word_clean": "不正なアクセス", "meaning": "システム等に対する正当でないアクセス"}, {"word_clean": "情報漏えい", "meaning": "情報が正当でない形で読み出されること"}, {"word_clean": "セキュリティホール", "meaning": "ソフトウェアの欠陥で、悪意あるソフトウェアに利用される可能性のあるもの"}, {"word_clean": "Firewall", "meaning": "外部のネットと内部のネットの間に設置し、正当でないアクセスを防ぐ機器やソフト"}, {"word_clean": "アクセスログ", "meaning": "情報にアクセスした者や日時などの記録"}, {"word_clean": "サイバー犯罪", "meaning": "情報技術を利用した犯罪"}, {"word_clean": "ワンクリック詐欺", "meaning": "Webでリンクやボタンなどの1動作に対して契約が成立したかのように言い募り金を請求する詐欺"}, {"word_clean": "フィッシング詐欺", "meaning": "Webで本来のサイトに似せたサイトに誘導して情報や料金を奪う詐欺"}, {"word_clean": "サイバーテロ", "meaning": "重要インフラ事業者のシステムがサイバー攻撃を受け、国民生活等に甚大な支障が生じること"}, {"word_clean": "チェーンメール", "meaning": "同じメールを複数発信しなければならないと思わせる文面のメール"}, {"word_clean": "デマ", "meaning": "正しくない、拡散を目的とした情報"}, {"word_clean": "フェイクニュース", "meaning": "正しいニュースを装った嘘の情報"}, {"word_clean": "架空請求", "meaning": "実際には存在しない負債を挙げてお金を請求すること"}, {"word_clean": "不正アクセス禁止法", "meaning": "アクセス制御のあるシステムに対しその制御をバイパスして利用させることを禁じる法律"}, {"word_clean": "なりすまし", "meaning": "個人が別の人に成り代わること"}, {"word_clean": "フィッシング", "meaning": "Webで本来のサイトに似せたサイトに誘導すること"}, {"word_clean": "spamメール", "meaning": "広告目的の、大量にばら撒かれるメール"}, {"word_clean": "クラッカー", "meaning": "システムに不正アクセスを行う人"}, {"word_clean": "JIS", "meaning": "日本産業規格。日本の産業製品等に関する国家規格"}, {"word_clean": "IEEE", "meaning": "米国に本部を置く電気・情報分野の学会で、多くの規格も定めている"}, {"word_clean": "ANSI", "meaning": "米国国家規格協会"}, {"word_clean": "E-Commerce", "meaning": "電子的に行われる商取引"}, {"word_clean": "インターネットバンキング", "meaning": "インターネットを通じた銀行の利用"}, {"word_clean": "オンラインオークション", "meaning": "ネットを通して行われるオークション"}, {"word_clean": "ネットショッピング", "meaning": "ネットショップでの買い物"}, {"word_clean": "仮想通貨", "meaning": "ネットを通じてモノ等の対価として利用したり法定通貨と取引所を通じて交換できるもの"}, {"word_clean": "暗号資産", "meaning": "ネットを通じてモノ等の対価として利用したり法定通貨と取引所を通じて交換できるもの"}, {"word_clean": "電子マネー", "meaning": "現金代わりに使える電子データ化されたお金"}, {"word_clean": "電子決済", "meaning": "現金を用いることなく電子的なデータの送受により決済すること"}, {"word_clean": "電子すかし", "meaning": "画像・動画・音声などのデータに情報を埋め込むことによってオリジナルかどうか判別できるる技術"}, {"word_clean": "エスクローサービス", "meaning": "信頼の置ける中立的な第三者が契約当事者の間に入り、代金決済等取引の安全性を確保するサービス"}, {"word_clean": "ブロックチェーン", "meaning": "参加者がブロックを連鎖させて保管することで一部の悪者により改ざんされない技術"}, {"word_clean": "クラウドファウンディング", "meaning": "プロジェクトに対し不特定多数の人が資金を供与する仕組み"}, {"word_clean": "オープンソフトウェア", "meaning": "ソースコードを公開し、その改変や再配布が認められているソフトウェア"}, {"word_clean": "マイナンバー", "meaning": "住民票を有する全ての個人が1つの番号を持ち行政手続等に使用する制度"}, {"word_clean": "Society5.0", "meaning": "AIやロボット等を活用して、人間がより便利で快適に生活を送ることができる社会"}, {"word_clean": "ICT", "meaning": "情報および通信の技術"}, {"word_clean": "IT", "meaning": "情報の技術"}, {"word_clean": "ICカード", "meaning": "カードにICチップが埋め込まれたもの"}, {"word_clean": "3Dプリンタ", "meaning": "3次元の立体を作り出せるプリンタ"}, {"word_clean": "ジオタグ", "meaning": "写真や動画等に追加できる、位置情報(緯度、経度)を示すメタデータ"}, {"word_clean": "QRコード", "meaning": "(1) 読み取りが早く容量が大きい2次元(平面状)バーコード"}, {"word_clean": "クラウドコンピューティング", "meaning": "ネット上の仮想化されたシステムによりデータが保管され取り扱われるシステム"}, {"word_clean": "緊急地震速報", "meaning": "地震の発生直後に強い揺れの到達時刻や震度等を予想し伝えるシステム"}, {"word_clean": "テレビ会議", "meaning": "遠隔拠点を通信回線等で結び、音声、映像等でコミュニケーションをとることができる通信形態"}, {"word_clean": "ETC", "meaning": "カードを挿した車載器と料金所のシステムで通信し電子的に料金を収受する"}, {"word_clean": "ITS", "meaning": "人と道路と車両とを接続することで交通事故や渋滞等の道路交通問題の解決を行う"}, {"word_clean": "IoT", "meaning": "あらゆるモノをインターネットに接続する技術"}, {"word_clean": "検索サイト", "meaning": "多数のWebサイトから関心のあるサイトを検索できるサービスを提供しているサイト"}, {"word_clean": "MOOC", "meaning": "Massive Open Online Courses、オンラインで海外や遠方の教育機関が提供する講座を受講できる仕組み"}, {"word_clean": "Twitter", "meaning": "SNSサービスの1つで、短いメッセージを交換したりそれに賛同を著したりできる"}, {"word_clean": "SNS", "meaning": "Web上で社会的ネットワーク(ソーシャルネットワーク)を構築可能にするサービス"}, {"word_clean": "VR", "meaning": "コンピュータにより創り出した世界をまるで現実のように知覚・体験できる技術"}, {"word_clean": "AR", "meaning": "現実世界を立体的に読み取り、仮想的に拡張する技術"}, {"word_clean": "テクノストレス", "meaning": "新しい技術に馴染めないことからくるストレス"}, {"word_clean": "ネット依存", "meaning": "ネットに依存し多くの時間を費やすこと"}, {"word_clean": "ディジタルディバイド", "meaning": "情報通信技術について行けない事による格差"}, {"word_clean": "ペアレンタルコントロール", "meaning": "子供が持つ情報機器の利用方法を保護者が管理する機能"}, {"word_clean": "クラッキング", "meaning": "システムに不正侵入すること"}, {"word_clean": "フレーミング", "meaning": "ネット上での喧嘩や非難合戦"}, {"word_clean": "AI", "meaning": "人間の脳で行っているような作業をコンピューターにさせること"}, {"word_clean": "機械学習", "meaning": "データから自動で学習しデータの背後にあるルールを発見する技術"}, {"word_clean": "深層学習", "meaning": "機械学習の一つで人間の神経細胞の構造を模した仕組みで学習する技術"}, {"word_clean": "UD", "meaning": "文化や年齢・性別・能力、障害の有無などに関わらず、出来る限り幅広い人々に適応すること"}, {"word_clean": "バリアフリー", "meaning": "高齢者や障害者等が使う際の障壁を除去すること"}, {"word_clean": "カラーユニバーサルデザイン", "meaning": "色を使ったり写真と文字を併用する際に多くの人に情報が正確に伝わ るよう配慮すること"}, {"word_clean": "アクセシビリティ", "meaning": "アクセスのしやすさ、製品やサービスの利用しやすさ"}, {"word_clean": "ユーザエクスペリエンス", "meaning": "製品やサービスなどを利用して得られるユーザの体験"}, {"word_clean": "ユーザビリティ", "meaning": "使いやすさ、目標達成に有効・効率的かつ快適であること"}, {"word_clean": "データマイニング", "meaning": "膨大なデータから知識やルールなどを発掘する技術・手法"}, {"word_clean": "データサイエンティスト", "meaning": "統計学・機械学習・AIを活用し、予測モデルや自動化プロセスを構築する人"}, {"word_clean": "ビッグデータ", "meaning": "さまざまな形をし、さまざまな性格を持った、さまざまな種類のデータ"}, {"word_clean": "コミュニケーション", "meaning": "人が人に意図を持って情報を伝えること"}, {"word_clean": "1対1", "meaning": "一人が一人に向けて伝えること"}, {"word_clean": "1対多", "meaning": "一人が多くの人に向けて伝えること"}, {"word_clean": "コンテンツ", "meaning": "メディアを通じて伝えられる情報の中身"}, {"word_clean": "伝播メディア", "meaning": "情報を伝達するメディア"}, {"word_clean": "表現メディア", "meaning": "情報を表現する手段を言い、文字 · 図形 · 音声 · 静止画 · 動画などがある"}, {"word_clean": "記録メディア", "meaning": "情報を記録するメディア"}, {"word_clean": "BBS", "meaning": "画面上でまとまった文章などを書き込んでコミュニケーションするもの"}, {"word_clean": "blog", "meaning": "発信者がまとまった記事を書き込み、読者が付属した掲示板で反応を返すもの"}, {"word_clean": "ソーシャルメディア", "meaning": "社会的ネットワーク(ソーシャルネットワーク)を形成するようなメディア"}, {"word_clean": "WWW", "meaning": "インターネット上にまたがって繋がるハイパーテキストのシステム"}, {"word_clean": "Browser", "meaning": "WWWのコンテンツを見たりリンクをたどれるソフト"}, {"word_clean": "AND検索", "meaning": "複数の条件の「かつ」を取る検索"}, {"word_clean": "OR検索", "meaning": "複数の条件の「または」を取る検索"}, {"word_clean": "NOT検索", "meaning": "ある条件に対し「それ以外」を取る検索"}, {"word_clean": "E-mail", "meaning": "ネット上で手紙のようにメッセージをやりとりするシステム"}, {"word_clean": "Webメール", "meaning": "Webアプリとして電子メールのクライアント(メールソフト)を実現したもの"}, {"word_clean": "CC", "meaning": "電子メールの写し送り先欄"}, {"word_clean": "BCC", "meaning": "電子メールの相手に見せない写し送り先欄"}, {"word_clean": "添付ファイル", "meaning": "電子メールの本文と一緒に送るファイル"}, {"word_clean": "アナログ", "meaning": "重さや長さのように値が連続していること"}, {"word_clean": "アナログ量", "meaning": "連続している量(連続量)"}, {"word_clean": "ディジタル", "meaning": "最小単位の何倍かのように飛び飛びの値であること"}, {"word_clean": "ディジタル量", "meaning": "飛び飛びの量(離散量)"}, {"word_clean": "ディジタルデータ", "meaning": "離散量や有限桁の数値で表せるデータ"}, {"word_clean": "ディジタル化", "meaning": "アナログ情報をデジタル情報に変換すること"}, {"word_clean": "A-D変換", "meaning": "アナログ情報をデジタル情報に変換すること"}, {"word_clean": "D-A変換", "meaning": "デジタル情報をアナログ情報に変換すること"}, {"word_clean": "符号化", "meaning": "様々な情報を一連の記号(符号)で表現できるよう体系化すること"}, {"word_clean": "コード化", "meaning": "様々な情報を一連の記号(符号)で表現できるよう体系化すること"}, {"word_clean": "データ量", "meaning": "データの多さ"}, {"word_clean": "B", "meaning": "8ビット"}, {"word_clean": "KB", "meaning": "1000バイトまたは1024バイト"}, {"word_clean": "MB", "meaning": "1000KBまたは1024KB"}, {"word_clean": "GB", "meaning": "1000MBまたは1024MB"}, {"word_clean": "TB", "meaning": "1000GBまたは1024GB"}, {"word_clean": "PB", "meaning": "1000KTBまたは1024TB"}, {"word_clean": "SI接頭語", "meaning": "国際単位系において規定されている、単位の倍量・分量を10進数で表す接頭語"}, {"word_clean": "接頭語", "meaning": "単語や数値の前につく造語成分"}, {"word_clean": "bit", "meaning": "0か1か、のように2つのうちどちらかの情報。デジタルデータの最小単位"}, {"word_clean": "コード体系", "meaning": "一群の文字に体系的に番号を割り当てたもの"}, {"word_clean": "文字コード", "meaning": "文字に対して割り振った番号ないしビット列"}, {"word_clean": "文字化け", "meaning": "本来の文字が別の文字に入れ替わって表示されること"}, {"word_clean": "ASCII", "meaning": "英数字などを含む7ビットのコード体系"}, {"word_clean": "UNICODE", "meaning": "世界の多くの文字をまとめて含むコード体系"}, {"word_clean": "UTF-8", "meaning": "UNICODEを1〜4個の8ビット単位で表せるようにした表現方式"}, {"word_clean": "JISコード", "meaning": "JIS(日本産業規格)が定めたコード体系で、8ビットと16ビットのものがある"}, {"word_clean": "EUC", "meaning": "ASCII文字と16ビットのJISコードの文字を共存させたコード体系"}, {"word_clean": "Shift JIS", "meaning": "ASCII文字と8ビットおよび16ビットのJISコードの文字を共存させたコード体系"}, {"word_clean": "フォント", "meaning": "統一された書体の文字のセット"}, {"word_clean": "ゴシック体", "meaning": "日本語の書体で、すべての画がほぼ同じ太さに見えるようデザインされたもの"}, {"word_clean": "明朝体", "meaning": "日本語の書体で、筆で書いた文字が元になったデザインのもの"}, {"word_clean": "プロポーショナルフォント", "meaning": "1つのサイズの中でも文字ごとに幅が異なる場合もあるフォント"}, {"word_clean": "等幅フォント", "meaning": "1つのサイズの中では全ての文字の幅が等しいフォント"}, {"word_clean": "UDフォント", "meaning": "出来る限り幅広い人々に適応することを目標にデザインされたフォント"}, {"word_clean": "ピクセル", "meaning": "デジタル画像の1つの点"}, {"word_clean": "ドット", "meaning": "デジタル画像の1つの点"}, {"word_clean": "解像度", "meaning": "画素の細かさの度合い"}, {"word_clean": "dpi", "meaning": "1インチあたり何ドットの解像度か"}, {"word_clean": "ppi", "meaning": "1インチあたり何ピクセルの解像度か"}, {"word_clean": "GIF", "meaning": "GIF形式は古くからある画像形式。色数最大256色、損失のない圧縮"}, {"word_clean": "JPEG", "meaning": "JPEG形式は写真に適した画像形式。よく使うのは損失のある圧縮"}, {"word_clean": "BMP", "meaning": "BMP形式はWindowsで標準だった画像形式。よく使うのは圧縮なし"}, {"word_clean": "トリミング", "meaning": "画像の一部分を切り出すこと"}, {"word_clean": "ビットマップ画像", "meaning": "画素が集まって構成される画像"}, {"word_clean": "ラスタデータ", "meaning": "画素が集まって構成される画像のデータ"}, {"word_clean": "ラスタ形式", "meaning": "画素が集まって構成される画像形式"}, {"word_clean": "ペイントソフト", "meaning": "画素に色をつけて行く形の描画ソフト"}, {"word_clean": "ベクター画像", "meaning": "線分・曲線・矩形・円などを数式で定義して構成される画像"}, {"word_clean": "ベクタデータ", "meaning": "線分・曲線・矩形・円などを数式で定義して構成される画像のデータ"}, {"word_clean": "ベクタ形式", "meaning": "線分・曲線・矩形・円などを数式で定義して構成される画像形式"}, {"word_clean": "ドローソフト", "meaning": "領域内に線分・曲線・矩形・円などを配置して絵を作る形の描画ソフト"}, {"word_clean": "色の3属性", "meaning": "色が持つ彩度・明度・色相という3つの属性"}, {"word_clean": "彩度", "meaning": "色の鮮やかさの度合い"}, {"word_clean": "明度", "meaning": "色の明るさの度合い"}, {"word_clean": "色相", "meaning": "色の「どの色か」という相"}, {"word_clean": "補色", "meaning": "色相環で反対の位置にある色"}, {"word_clean": "類似色", "meaning": "色相環で近い位置にある色"}, {"word_clean": "階調", "meaning": "彩度・明度・色相の段階数"}, {"word_clean": "Webセーフカラー", "meaning": "ブラウザや OS の種類に関係なくWeb ページで常に表示できる 216 色"}, {"word_clean": "色相環", "meaning": "色相の異なる色を隣り合うものどうし環状に並べたもの"}, {"word_clean": "RGB", "meaning": "赤・緑・青の3原色"}, {"word_clean": "光の3原色", "meaning": "RGBの3原色"}, {"word_clean": "加法混色", "meaning": "光の3原色を混ぜ合わせて色を作り出すこと"}, {"word_clean": "CMY", "meaning": "シアン・マゼンタ・イエローの3原色"}, {"word_clean": "色の3原色", "meaning": "CMYの3原色"}, {"word_clean": "減法混色", "meaning": "色の3原色を混ぜ合わせて色を作り出すこと"}, {"word_clean": "圧縮", "meaning": "データを少ないビット数で済むように変換すること"}, {"word_clean": "伸張", "meaning": "圧縮したデータを元のように戻すこと"}, {"word_clean": "展開", "meaning": "圧縮したデータを元のように戻すこと"}, {"word_clean": "圧縮率", "meaning": "圧縮したデータと元のデータの大きさの比率"}, {"word_clean": "可逆圧縮", "meaning": "圧縮したものを伸長すると元と同じになる圧縮方法"}, {"word_clean": "非可逆圧縮", "meaning": "圧縮したものを伸長した時に完全には元に戻らない圧縮方法"}, {"word_clean": "ランレングス圧縮", "meaning": "データ中に同じ値が繰り返し現れる時にそれを(値・回数)に置き換える圧縮方法"}, {"word_clean": "ZIP", "meaning": "1つまたは複数のファイルをまとめて圧縮した形式"}, {"word_clean": "コーデック", "meaning": "映像や音声データをエンコード(符号化)/デコード(復号化)するプログラム"}, {"word_clean": "クロスチェック", "meaning": "二つ以上の異なる方法や観点・資料などによりチェックすること"}, {"word_clean": "チェックディジット", "meaning": "誤り検出のため、数字の列の末尾に全体が決まった規則に従うように付加する数字"}, {"word_clean": "パリティチェック", "meaning": "一連のビットに全体で1の数が偶数(奇数)になるようビットを付け加え、それをチェックすること"}, {"word_clean": "パリティビット", "meaning": "パリティチェックのために付け加えたビット"}, {"word_clean": "標本化", "meaning": "信号の値を一定間隔で読み取ること"}, {"word_clean": "サンプリング", "meaning": "信号の値を一定間隔で読み取ること"}, {"word_clean": "量子化", "meaning": "DA変換で読み取った値を何段階かのデジタル値に直すこと"}, {"word_clean": "量子化ビット数", "meaning": "量子化で出力する値のビット数"}, {"word_clean": "周波数", "meaning": "波が1秒間に何往復振動するか"}, {"word_clean": "Hz", "meaning": "波が1秒間に何往復振動するか"}, {"word_clean": "標本化周波数", "meaning": "サンプリングで信号を1秒間に何回読みとるか"}, {"word_clean": "サンプリング周波数", "meaning": "サンプリングで信号を1秒間に何回読みとるか"}, {"word_clean": "周期", "meaning": "波が1往復振動するのにかかる時間"}, {"word_clean": "標本化周期", "meaning": "サンプリングで信号を読みとる時間間隔"}, {"word_clean": "サンプリング周期", "meaning": "サンプリングで信号を読みとる時間間隔"}, {"word_clean": "標本化定理", "meaning": "標本化で元の信号の性質を捉えるのに必要な最低限の周波数を定める定理"}, {"word_clean": "PCM方式", "meaning": "アナログ信号を一定周期で標本化・量子化してデジタル化する方式"}, {"word_clean": "MP3", "meaning": "広く普及している音声圧縮方式および形式の1つ"}, {"word_clean": "動画", "meaning": "絵が動くコンテンツ"}, {"word_clean": "フレーム", "meaning": "動画の中の1つの絵"}, {"word_clean": "フレームレート", "meaning": "1秒あたりのフレーム数"}, {"word_clean": "fps", "meaning": "1秒あたりのフレーム数"}, {"word_clean": "AVI", "meaning": "マイクロソフト社が開発した動画ファイル形式"}, {"word_clean": "H.264", "meaning": "広く使われている動画コーデックの1つ"}, {"word_clean": "MPEG", "meaning": "ISO(国際標準化機構)とIEC(国際電気標準会議)が合同で設置した委員会の勧告した規格群"}, {"word_clean": "MPEG-4", "meaning": "動画・音声データのコーデックの国際的な標準規格の1つ"}, {"word_clean": "ストリーミング", "meaning": "冒頭の一部を取り寄せた段階で視聴を開始できる方式"}, {"word_clean": "10進法", "meaning": "0〜9の数字を用い、1桁進むごとに値が10倍になる記数法"}, {"word_clean": "2進法", "meaning": "0と1の数字を用い、1桁進むごとに値が2倍になる記数法"}, {"word_clean": "2進数", "meaning": "2進法で書き表された数値を2進数と呼ぶこともある（注1）"}, {"word_clean": "16進法", "meaning": "0〜9およびA〜Fの数字を用い、1桁進むごとに値が16倍になる記数法"}, {"word_clean": "16進数", "meaning": "16進法で書き表された数値を16進数と呼ぶこともある（注1）"}, {"word_clean": "補数", "meaning": "ある数をn進法で表現した時に、足し合わせるとnのべき乗になる数のうち最小のもの"}, {"word_clean": "2の補数", "meaning": "2進法の補数を用いて負の数を表す方式"}, {"word_clean": "浮動小数点数", "meaning": "小数点付きの数を、仮数と指数の組みで表したもの"}, {"word_clean": "アイコン", "meaning": "ファイルの種類やプログラム等を小さな絵記号にして表示したもの"}, {"word_clean": "ピクトグラム", "meaning": "多くの人が直感的に理解できるシンプルな絵やマーク"}, {"word_clean": "レイアウト", "meaning": "2次元や3次元のものの配置"}, {"word_clean": "DTP", "meaning": "デスクトップパブリッシング、印刷物の編集やデザインをコンピュータ上で行うこと"}, {"word_clean": "グラフ", "meaning": "(1) データを読み取れる図 (2) 頂点と辺から成る図形"}, {"word_clean": "ヒストグラム", "meaning": "柱状グラフ、度数分布を(度数0のところ以外は)互いに隣接した柱で表したグラフ"}, {"word_clean": "円グラフ", "meaning": "あるものの内訳を円の中のパイ状の領域で表したグラフ"}, {"word_clean": "折れ線グラフ", "meaning": "値の推移を頂点を互いにつなげた折線で表したグラフ"}, {"word_clean": "棒グラフ", "meaning": "総量の変化を柱状の領域を並べて表したグラフ"}, {"word_clean": "情報デザイン", "meaning": "情報を目的に応じて収集・分析・再構築してわかりやすい表現に変換すること"}, {"word_clean": "シグニファイア", "meaning": "人間の行動を正しく誘導するためのサイン"}, {"word_clean": "アフォーダンス", "meaning": "人間の特定の行動を誘発するようなヒント"}, {"word_clean": "インフォグラフィック", "meaning": "言葉や数字だけでは伝わりづらい情報を整理・分析・編集してイラスト・チャート等で表現したもの"}, {"word_clean": "絵文字", "meaning": "簡単な絵のような形で、文字の代わりに使われるもの"}, {"word_clean": "顔文字", "meaning": "記号や文字で作成された、感情を表す顔の表情マーク"}, {"word_clean": "プレゼンテーション", "meaning": "話題を決めてスライドなどを使って聞き手に向けて発表すること"}, {"word_clean": "プレゼンテーションソフト", "meaning": "プレゼンテーションのためのスライドを作ったり投影するソフト"}, {"word_clean": "スライド", "meaning": "プレゼンテーション用に画面やスクリーンに投影するもの"}, {"word_clean": "アニメーション", "meaning": "スライドの移り変わりなどに動く効果をつけること"}, {"word_clean": "リハーサル", "meaning": "プレゼンテーションなどの準備として同じスライドや時間で練習すること"}, {"word_clean": "ハイパーリンク", "meaning": "Webページ中から他のWebのリソースのありかを示したもの"}, {"word_clean": "リンク", "meaning": "Webページ中から他のWebのリソースのありかを示したもの"}, {"word_clean": "HTML", "meaning": "Webページのコンテンツを記述するマークアップ言語"}, {"word_clean": "Webページ", "meaning": "WebのコンテンツとなるHTMLで記述されたページ"}, {"word_clean": "マークアップ", "meaning": "コンテンツのそれぞれの部分が何を表すかをコンテンツと区別できる記法で書き込んだもの"}, {"word_clean": "タグ", "meaning": "マークアップのためのコンテンツと区別できる記法"}, {"word_clean": "代替テキスト", "meaning": "画像のタグに指定する、画像が利用できない場合に代替として示されるべきテキスト"}, {"word_clean": "CSS", "meaning": "Cascading StyleSheet。HTMLと一緒に使われる、コンテンツの見せ方を指定する言語"}, {"word_clean": "CMS", "meaning": "Contents Management System。Webサイトの中身を一括して管理するシステム"}, {"word_clean": "Webサイト", "meaning": "Webのひとまとまりのページ群"}, {"word_clean": "UI", "meaning": "システムと利用者の接する部分(のでき方)"}, {"word_clean": "GUI", "meaning": "グラフィクスとポインティグデバイス(マウス等)を用いたUI"}, {"word_clean": "CUI", "meaning": "文字のみの入出力を用いたUI"}, {"word_clean": "メインフレーム", "meaning": "基幹システムなどに用いられる大型コンピュータシステム"}, {"word_clean": "ENIAC", "meaning": "ペンシルバニア大学で開発された真空管を使った最初期の巨大なコンピュータ"}, {"word_clean": "量子コンピュータ", "meaning": "量子力学の原理を計算に応用したコンピュータ"}, {"word_clean": "コンピュータ", "meaning": "電子回路を用いてプログラムに従い演算やデータの蓄積・検索・加工など行う装置"}, {"word_clean": "ハードウェア", "meaning": "機械や電子機器の装置"}, {"word_clean": "マザーボード", "meaning": "電子機器の最も主要な部分を搭載した基盤"}, {"word_clean": "記憶装置", "meaning": "コンピュータでデータの記憶を司る部分"}, {"word_clean": "メインメモリ", "meaning": "CPUと密接に協働する番地のついた記憶装置"}, {"word_clean": "メモリ", "meaning": "CPUと密接に協働する番地のついた記憶装置"}, {"word_clean": "論理回路", "meaning": "論理演算を行う電子回路"}, {"word_clean": "CPU", "meaning": "コンピュータの中枢部分で、演算とプログラム実行を司る"}, {"word_clean": "クロック信号", "meaning": "論理回路を同期して動かすための信号"}, {"word_clean": "クロック周波数", "meaning": "クロック信号の周波数(1秒間に振動する回数)"}, {"word_clean": "5大機能", "meaning": "コンピュータの主要機能である、演算・制御・記憶・入力・出力のこと"}, {"word_clean": "制御装置", "meaning": "コンピュータで命令の実行を司る部分"}, {"word_clean": "プログラムカウンタ", "meaning": "次に実行する命令が主記憶の何番地であるかを保持しているレジスタ"}, {"word_clean": "演算装置", "meaning": "コンピュータで演算やデータの加工を司る部分"}, {"word_clean": "レジスタ", "meaning": "CPU上で演算や制御のためのデータを保持する回路"}, {"word_clean": "誤差", "meaning": "計算で得られた結果と真の値(と考えられるもの)との差"}, {"word_clean": "アンダーフロー", "meaning": "演算結果が表せる範囲を超えて小さくなること"}, {"word_clean": "けた落ち", "meaning": "引き算の結果有効数字が少なくなること"}, {"word_clean": "丸め", "meaning": "小数点つきの演算で一番’下の桁の数に四捨五入などに相当する処理をすること"}, {"word_clean": "丸め誤差", "meaning": "丸めの結果生まれる誤差"}, {"word_clean": "打ち切り誤差", "meaning": "無限級数の和の計算を途中で打ち切る結果生まれる誤差"}, {"word_clean": "情報落ち", "meaning": "絶対値の大きい値と小さい値を加減算するとき小さい値の下の桁が無視されること"}, {"word_clean": "符号部", "meaning": "負か非負かを区分するビット"}, {"word_clean": "仮数部", "meaning": "浮動小数点で、指数を除いた(有効数字の)部分"}, {"word_clean": "指数部", "meaning": "浮動小数点で、小数点をいくつずらすかの部分"}, {"word_clean": "オーバーフロー", "meaning": "(1) 演算結果が表せる範囲を超えて大きくなること"}, {"word_clean": "論理演算", "meaning": "入力や結果が論理値(0か1か)である演算"}, {"word_clean": "真理値表", "meaning": "論理回路の入力と結果をまとめた表"}, {"word_clean": "半加算器", "meaning": "2つの入力について、その和と桁上がりとを出力する回路"}, {"word_clean": "全加算器", "meaning": "2つの入力と下位桁からの桁上がりについて、その和と桁上がりとを出力する回路"}, {"word_clean": "論理ゲート", "meaning": "論理値を入出力とする素子"}, {"word_clean": "ANDゲート", "meaning": "AND(かつ)演算のゲート"}, {"word_clean": "ORゲート", "meaning": "OR(または)演算のゲート"}, {"word_clean": "NANDゲート", "meaning": "AND(かつ)演算の否定を出力するゲート"}, {"word_clean": "NORゲート", "meaning": "OR(または)演算の否定を出力するゲート"}, {"word_clean": "NOTゲート", "meaning": "入力の否定を出力するゲート"}, {"word_clean": "EOR回路", "meaning": "2つの入力のちょうど1つだけが「1」のときのみ「1」を出力するゲート"}, {"word_clean": "入力装置", "meaning": "コンピュータに入力を与える装置"}, {"word_clean": "出力装置", "meaning": "コンピュータから出力を行う装置"}, {"word_clean": "センサ", "meaning": "物理的・化学的な現象を電気信号・データに変換する装置"}, {"word_clean": "USB", "meaning": "Universal Serial Bus。コンピュータに周辺機器を接続するための規格の1つ"}, {"word_clean": "HDMI", "meaning": "High-Definition Multimedia Interface。映像・音声・制御信号を送れる通信規格"}, {"word_clean": "補助記憶装置", "meaning": "主記憶よりも遅いが大容量・低コストな記憶装置"}, {"word_clean": "ハードディスク", "meaning": "回転する円盤に磁気で書き込みを行う補助記憶装置"}, {"word_clean": "SSD", "meaning": "Solid State Drive。半導体メモリをハードディスクのように使えるようパッケージしたもの"}, {"word_clean": "フラッシュメモリ", "meaning": "電源を切っても内容が保持される半導体メモリ"}, {"word_clean": "周辺機器", "meaning": "コンピュータシステムで、CPUとメモリ以外の装置"}, {"word_clean": "アクチュエータ", "meaning": "動力源と機構部品を組み合わせて、機械的な動作を行う装置"}, {"word_clean": "インタフェース", "meaning": "コンピュータシステムと外部機器の接する部分"}, {"word_clean": "計測", "meaning": "ものの数量的状態を測ること"}, {"word_clean": "制御", "meaning": "システムやその部分を思ったように動かすこと"}, {"word_clean": "ソフト", "meaning": "動くコンピュータの要素のうち、ハードウェア以外のもの。プログラム・データ等"}, {"word_clean": "プログラム", "meaning": "コンピュータの動作内容を定める、指示書のようなもの"}, {"word_clean": "ソース", "meaning": "人間が普通に読んだり書いたりできる形のコード(プログラムの断片)"}, {"word_clean": "基本ソフト", "meaning": "コンピュータを動かしたり有効に使うためのソフトウェア"}, {"word_clean": "アプリ", "meaning": "人間がやりたい特定の作業をやらせてくれるソフトウェア"}, {"word_clean": "デバイスドライバ", "meaning": "コンピュータに接続された周辺機器を動かすためのプログラム"}, {"word_clean": "OS", "meaning": "コンピュータ内の資源を管理し、ユーザが使いたいソフトウェアを動かしてくれる基本ソフト"}, {"word_clean": "タスク管理", "meaning": "OSの中でタスクの動作や制御を司る部分"}, {"word_clean": "ファイル", "meaning": "コンピュータ上で情報を保管する論理的な単位"}, {"word_clean": "ディレクトリ", "meaning": "複数のファイルを管理等のためまとめる機構"}, {"word_clean": "拡張子", "meaning": "ファイルの名前の末尾の部分で、そのファイルの種類や用途をあらわす"}, {"word_clean": "プログラミング", "meaning": "プログラムを作ること"}, {"word_clean": "構造化プログラミング", "meaning": "手続き(関数)や制御構造の入れ子(積み重ね)としてプログラムを作ること"}, {"word_clean": "オブジェクト指向プログラミング", "meaning": "オブジェクト(もの)の集まりとしてプログラムを作ること"}, {"word_clean": "機械語", "meaning": "コンピュータがメモリにおいて直接実行できる形のプログラム"}, {"word_clean": "プログラミング言語", "meaning": "プログラムを書くのに用いる記法"}, {"word_clean": "手続き型言語", "meaning": "代入と繰り返しと条件分岐を基本とするプログラミング言語の仲間"}, {"word_clean": "表計算マクロ言語", "meaning": "表計算ソフトのマクロを記述するのに用いるプログラミング言語"}, {"word_clean": "Java Script", "meaning": "多くのブラウザに内蔵され、Webページと連携させるのに使われるプログラミング言語"}, {"word_clean": "Python", "meaning": "統計や数値計算などのライブラリを多く持ち広く使われるプログラミング言語"}, {"word_clean": "Scratch", "meaning": "ブロックをGUIで組み立てる方式のプログラミング言語"}, {"word_clean": "コーディング", "meaning": "プログラムのコードを書く作業"}, {"word_clean": "バグ", "meaning": "プログラムの間違い"}, {"word_clean": "デバッグ", "meaning": "プログラムの間違いを除去する作業"}, {"word_clean": "テスト", "meaning": "プログラムの間違いを発見する作業"}, {"word_clean": "フローチャート", "meaning": "プログラムの実行の流れを表す図法"}, {"word_clean": "アクティビティ図", "meaning": "プログラムの全体的なシステム中の制御の流れを示す図法"}, {"word_clean": "状態遷移図", "meaning": "システムの状態とその間の遷移について表す図法"}, {"word_clean": "統合開発環境", "meaning": "プログラムの開発ツール群をまとめてGUIで使えるようにしたもの"}, {"word_clean": "コンパイラ", "meaning": "ソースコードを機械語またはそれに近いものに変換するソフトウェア"}, {"word_clean": "インタプリタ", "meaning": "ソースコードを機械語に変換せず、その意味を読み取って実行するソフトウェア"}, {"word_clean": "ライブラリ", "meaning": "特定目的のため用意された手続き(関数)の集まり"}, {"word_clean": "API", "meaning": "ライブラリの手続き(関数)呼び出し方法をまとめたもの"}, {"word_clean": "乱数", "meaning": "ランダムな性質を持つ一連の数"}, {"word_clean": "変数", "meaning": "プログラム中で値を保持する機構"}, {"word_clean": "グローバル変数", "meaning": "複数の手続き(関数)から共通してアクセスできる変数"}, {"word_clean": "代入", "meaning": "変数への値の書き込み"}, {"word_clean": "演算子", "meaning": "演算を表す記号"}, {"word_clean": "比較演算子", "meaning": "比較演算を表す記号"}, {"word_clean": "論理演算子", "meaning": "論理演算を表す記号"}, {"word_clean": "真", "meaning": "成り立つことを表す論理値"}, {"word_clean": "偽", "meaning": "成り立たないことを表す論理値"}, {"word_clean": "AND", "meaning": "AND(かつ)演算"}, {"word_clean": "OR", "meaning": "OR(または)演算"}, {"word_clean": "NOT", "meaning": "NOT(〜でない)演算"}, {"word_clean": "EOR", "meaning": "2者のうち片方だけが真である時にのみ真となる演算(2者の真偽値が異なる場合に真となる演算)"}, {"word_clean": "順次", "meaning": "複数の動作を順に実行すること"}, {"word_clean": "順次構造", "meaning": "複数の動作を順に実行することを1つの動作と考えること"}, {"word_clean": "分岐型構造", "meaning": "複数の動作から1つを選び実行すること"}, {"word_clean": "反復", "meaning": "一連の動作を繰り返し実行すること"}, {"word_clean": "くりかえし構造", "meaning": "一連の動作を繰り返し実行すること"}, {"word_clean": "入れ子構造", "meaning": "構造が構造の連なりを内包できること"}, {"word_clean": "選択", "meaning": "(1) 複数の動作から1つを選び実行すること"}, {"word_clean": "配列", "meaning": "値が連続して並んでいる構造"}, {"word_clean": "リスト", "meaning": "値が連続して並んでいる構造"}, {"word_clean": "配列の要素", "meaning": "連続して並んでいる要素の1つ"}, {"word_clean": "添え字", "meaning": "連続して並んでいるうちの何番目かを表す番号"}, {"word_clean": "1次元配列", "meaning": "1次元的に値が並んでいる配列"}, {"word_clean": "2次元の配列", "meaning": "2次元的に値が並んでいる配列"}, {"word_clean": "関数", "meaning": "手続きとも言う。コードの集まりに名前を付け、引数を渡して呼び出せるようにしたもの"}, {"word_clean": "サブルーチン", "meaning": "手続きとも言う。コードの集まりに名前を付け、引数を渡して呼び出せるようにしたもの"}, {"word_clean": "組み込み関数", "meaning": "プログラミング言語の一部として予め用意されている関数"}, {"word_clean": "ユーザ定義関数", "meaning": "ユーザが必要に応じて定義する関数"}, {"word_clean": "引数", "meaning": "手続き(関数)を呼び出す際に併せて渡す値"}, {"word_clean": "戻り値", "meaning": "手続き(関数)が終わって呼び出し箇所に戻る際に併せて返す値"}, {"word_clean": "レコード", "meaning": "複数の値が組となった構造"}, {"word_clean": "フィールド", "meaning": "レコードの複数の値のどれかを示す名前"}, {"word_clean": "テーブル", "meaning": "レコードが1次元的に並んだ構造"}, {"word_clean": "Algorithm", "meaning": "問題を解決するための手順ないし計算方法"}, {"word_clean": "探索", "meaning": "表の中から指定したキーと一致する項目を見つけること"}, {"word_clean": "線形探索", "meaning": "表の端から順にキーとの一致を調べていく探索方法"}, {"word_clean": "2分探索", "meaning": "整列済の表で中央項目との大・小・一致を見、一致でない時適切な側の半分に同様に繰り返す探索方法"}, {"word_clean": "ソート", "meaning": "並びを何らかの基準の昇順または降順に並べ替えること"}, {"word_clean": "バブルソート", "meaning": "隣接要素を順に調べ、並べたい順序と比較して逆順なら交換することを繰り返す整列方法"}, {"word_clean": "選択ソート", "meaning": "列の最小値を取り出し、残りからまた最小値を取り出し、を繰り返す整列方法"}, {"word_clean": "挿入ソート", "meaning": "列の1番目を置き、2番目以降は適切な位置に挿入することを繰り返す整列方法"}, {"word_clean": "降順", "meaning": "小さくなる順"}, {"word_clean": "昇順", "meaning": "大きくなる順"}, {"word_clean": "アベレージ", "meaning": "総和を総数で割った値"}, {"word_clean": "分散", "meaning": "「それぞれの値から平均を引いた値の2乗」の平均値"}, {"word_clean": "標準偏差", "meaning": "分散の平方根"}, {"word_clean": "モンテカルロ法", "meaning": "乱数を用いたシミュレーションや数値計算の手法"}, {"word_clean": "シミュレーション", "meaning": "実物の代わりに模型やモデルを用いてやってみること"}, {"word_clean": "待ち行列", "meaning": "サービスに対して待っている人が行列を作って待つこと"}, {"word_clean": "モデリング", "meaning": "モデルを作ること"}, {"word_clean": "モデル", "meaning": "対象となるものや事柄のうち、関心のある部分だけを取り出したもの"}, {"word_clean": "パラメータ", "meaning": "モデルの中で、実際に合わせるため調整できる部分"}, {"word_clean": "確定モデル", "meaning": "数式を用いて1つの解答を求められるモデル"}, {"word_clean": "確率モデル", "meaning": "ランダムな現象が含まれるなどして、確率的な結果しか求められないモデル"}, {"word_clean": "実物モデル", "meaning": "実物と同じ大きさや形をもつモデル"}, {"word_clean": "物理モデル", "meaning": "実物を模したモデル"}, {"word_clean": "論理モデル", "meaning": "現象や手続きなどを扱うモデル"}, {"word_clean": "図的モデル", "meaning": "図の形で表されたモデル"}, {"word_clean": "数式モデル", "meaning": "数式の形で表されたモデル"}, {"word_clean": "数理モデル", "meaning": "数式の形で表されたモデル"}, {"word_clean": "静的モデル", "meaning": "時間的に変化しない部分のみを含むモデル"}, {"word_clean": "動的モデル", "meaning": "時間の経過に影響される部分を含むモデル"}, {"word_clean": "ネットワーク", "meaning": "網目状の構造をもつもの"}, {"word_clean": "情報通信ネットワーク", "meaning": "コンピュータやその他の情報機器がつながっているネットワーク"}, {"word_clean": "コンピュータネットワーク", "meaning": "コンピュータやその他の情報機器がつながっているネットワーク"}, {"word_clean": "通信プロトコル", "meaning": "通信のために守らなければならない決まり事"}, {"word_clean": "プロトコル", "meaning": "通信のために守らなければならない決まり事"}, {"word_clean": "OSI参照モデル", "meaning": "ISOが定めたネットワークの機能を7階層に分けて整理したモデル"}, {"word_clean": "パケット", "meaning": "データを決まった大きさの単位に分けたもの"}, {"word_clean": "パケット交換方式", "meaning": "データを決まった大きさの単位に分けてそれぞれに行き先を持たせて送る方式"}, {"word_clean": "回線交換方式", "meaning": "データを送るのに先立って行き先を指定して通信路を確保する方式"}, {"word_clean": "ヘッダ", "meaning": "データの前に付けられた、制御情報などを入れた領域"}, {"word_clean": "LAN", "meaning": "局所的な範囲でつながっているネットワーク"}, {"word_clean": "WAN", "meaning": "LANを含む、広範囲につながったネットワーク"}, {"word_clean": "ARPANET", "meaning": "インターネットのもとになった、世界最初のパケット交換方式ネットワーク"}, {"word_clean": "TCP/IP", "meaning": "インターネットで使われる通信プロトコルの総称"}, {"word_clean": "ISP", "meaning": "学校、家庭、企業などのLANをインターネットに繋いでくれる事業者"}, {"word_clean": "クラウドサービス", "meaning": "ネット上の仮想化されたシステムにより提供されるサービス"}, {"word_clean": "アップロード", "meaning": "手元のマシンからサーバ等に転送すること"}, {"word_clean": "ダウンロード", "meaning": "サーバ等から手元のマシンに転送すること"}, {"word_clean": "クライアント/サーバシステム", "meaning": "少数のサーバが多数のクライアントに対してサービスを提供する形態のシステム"}, {"word_clean": "クライアントサーバ型", "meaning": "少数のサーバが多数のクライアントに対してサービスを提供する形態"}, {"word_clean": "クライアント", "meaning": "ユーザごとに起動されサーバからサービスを受けるプログラム"}, {"word_clean": "サーバ", "meaning": "管理されたサーバシステム上で動き多数のクライアントにサービスを提供するプログラム"}, {"word_clean": "Webアプリ", "meaning": "Webページ群とそこへの入出力を扱うサーバ側プログラム群で構成されるアプリケーション"}, {"word_clean": "P2P型", "meaning": "各ユーザが動かすプログラムが協力して全体の作業もこなすという形態"}, {"word_clean": "トランスポート層", "meaning": "OSI参照モデルで第4層。エラー制御。整列、フロー制御、輻輳制御などを受け持つ層"}, {"word_clean": "再送", "meaning": "パケットが喪失・破損したとき、同じパケットを再度送ること"}, {"word_clean": "TCP", "meaning": "TCP/IPのトランスポート層プロトコルの一つで、仮想回線を提供する"}, {"word_clean": "DNS", "meaning": "TCP/IPで、ドメイン名とIPアドレスの対応を司るシステム"}, {"word_clean": "DNSサーバ", "meaning": "DNSの機能を実現するサーバ"}, {"word_clean": "ドメイン名", "meaning": "TCP/IPでホスト・サイトを識別する英数字の名前"}, {"word_clean": "トップレベルドメイン", "meaning": "ドメイン名の最後のピリオドより後ろの部分"}, {"word_clean": "インターネット層", "meaning": "OSI参照モデルで第3層(ネットワーク層)。経路制御を司る"}, {"word_clean": "IP version 6", "meaning": "IPの新しいバージョンで128ビットのアドレスを用いる"}, {"word_clean": "IP", "meaning": "TCP/IPのインターネット層プロトコルで、経路制御を受け持つ"}, {"word_clean": "IPv4", "meaning": "IPの古くからあるバージョンで32ビットのアドレスを用いる"}, {"word_clean": "IPアドレス", "meaning": "IPが使用する32ビット(IPv6では128ビット)のアドレス"}, {"word_clean": "グローバルIPアドレス", "meaning": "世界中で一意に決まるIPアドレス"}, {"word_clean": "プライベートIPアドレス", "meaning": "局所的な通信にのみ使用し、自由に割り当てられるIPアドレス"}, {"word_clean": "ルータ", "meaning": "パケットを経路制御表に従って正しい方向に送る機器"}, {"word_clean": "ルーティング", "meaning": "パケットを正しい方向に送ること"}, {"word_clean": "経路制御", "meaning": "パケットを正しい方向に送ること"}, {"word_clean": "経路制御表", "meaning": "パケットを正しい方向に送るために使用する表"}, {"word_clean": "ルーティングテーブル", "meaning": "パケットを正しい方向に送るために使用する表"}, {"word_clean": "DHCP", "meaning": "Dynamic Host Configuration Protocol。IPアドレス等を自動的に割り当てる"}, {"word_clean": "FTTH", "meaning": "Fiber To The Home。電話局から家庭の宅内まで光ファイバーで接続される方式"}, {"word_clean": "MACアドレス", "meaning": "ネットワーク上のインターフェース1つずつが持つ固有のアドレス"}, {"word_clean": "VPN", "meaning": "Virtual Private Network。仮想専用線。通信の安全性を高められる"}, {"word_clean": "有線LAN", "meaning": "有線で構築されたLAN"}, {"word_clean": "Ethernet", "meaning": "有線でLANの接続をする時に多く使われている規格"}, {"word_clean": "ハブ", "meaning": "LANのインタフェースからの線を集約し相互に接続する機器"}, {"word_clean": "スイッチングハブ", "meaning": "ハブの一種で、データを行き先のインタフェースのみに中継するもの"}, {"word_clean": "スイッチ", "meaning": "ハブの一種で、データを行き先のインタフェースのみに中継するもの"}, {"word_clean": "集線装置", "meaning": "複数の伝送路を収容、接続する装置の総称"}, {"word_clean": "無線LAN", "meaning": "無線で構築されたLAN"}, {"word_clean": "Wi-Fi", "meaning": "IEEE 802.11規格に準拠した無線LAN機器に付けられるロゴ"}, {"word_clean": "IEEE 802.11", "meaning": "IEEEが定めている無線LANの標準規格"}, {"word_clean": "アクセスポイント", "meaning": "無線LAN機器の基地局となる機器"}, {"word_clean": "ブロードバンド", "meaning": "速度の速い通信回線を利用して大容量データをやりとりすること"}, {"word_clean": "bps", "meaning": "bits per second、ネット回線などで1秒間に何ビットを動かせるか(速さ)の単位"}, {"word_clean": "ONU", "meaning": "Optical Network Unit、光回線の信号を電気信号に変換して接続する装置"}, {"word_clean": "5G", "meaning": "高速・大容量の通信を実現する第5世代移動通信システム"}, {"word_clean": "Bluetooth", "meaning": "近距離での無線通信を行うための規格の1つ"}, {"word_clean": "暗号", "meaning": "第三者が通信文を見ても特別な知識なしでは読めないように変換すること"}, {"word_clean": "暗号化", "meaning": "もとの文(平文)を暗号文に変換すること"}, {"word_clean": "暗号文", "meaning": "特別な知識なしでは読めないように変換したもの"}, {"word_clean": "復号", "meaning": "暗号文をもとの文(平文)に変換すること"}, {"word_clean": "平文", "meaning": "暗号化する前の、もとの文"}, {"word_clean": "鍵", "meaning": "暗号化で使用するデータ"}, {"word_clean": "シーザー暗号", "meaning": "各文字をアルファベット順で決まった数だけ環状にずらした文字に置き換える暗号"}, {"word_clean": "共通鍵方式", "meaning": "暗号化と復号の両方におなじ鍵を使用する暗号方式"}, {"word_clean": "公開かぎ暗号方式", "meaning": "暗号化と復号の両方に異なる鍵を使用する暗号方式"}, {"word_clean": "公開鍵", "meaning": "公開鍵暗号においてこれを用いて暗号化したものが秘密鍵のみで複号できる、公開される鍵"}, {"word_clean": "秘密鍵", "meaning": "秘匿される鍵で、公開鍵暗号では公開鍵で暗号化したものがこれを用いてのみ複号できる"}, {"word_clean": "セキュリティポリシー", "meaning": "企業や組織において実施する情報セキュリティ対策の方針や行動指針"}, {"word_clean": "認証局", "meaning": "電子署名において本人確認や電子証明書の発行などをおこなう機関"}, {"word_clean": "フールプルーフ", "meaning": "誤った操作を行っても重大な事故を招かないよう設計すること"}, {"word_clean": "フェイルセーフ", "meaning": "エラーが発生してもそれが安全な状態に導くような設計や対策"}, {"word_clean": "アクセス制御", "meaning": "情報等に誰がアクセスしてよいか管理すること"}, {"word_clean": "アクセス権", "meaning": "情報等にアクセスできる権限"}, {"word_clean": "電子証明書", "meaning": "信頼できる第三者(認証局)やそれに代わるシステムが個人やホスト等の真正性を電子的に証明するもの"}, {"word_clean": "フィルタリング", "meaning": "主に未成年者の違法・有害なウェブサイトへのアクセスを制限すること"}, {"word_clean": "ブラックリスト方式", "meaning": "フィルタリングで、制限すべきサイトをリストアップする方式"}, {"word_clean": "ホワイトリスト方式", "meaning": "フィルタリングで、許可すべきサイトをリストアップする方式"}, {"word_clean": "ハッシュ値", "meaning": "元データから決まった方法で計算され、元データが異なれば違う値をとる確率が高い数値"}, {"word_clean": "パターンファイル", "meaning": "アンチウィルスソフトが使用する、マルウェアのパターンを集めたファイル"}, {"word_clean": "DDoS攻撃", "meaning": "サービスが追い付かなくさせる攻撃(DoS)と、それを多数のマシンからさせる方法(DDoS)"}, {"word_clean": "パケットフィルタリング", "meaning": "通過しようとするパケットを検査し、条件に合わないものは廃棄すること"}, {"word_clean": "IMAP", "meaning": "受け取ったメールをサーバ内で保管し整理・アクセスできるプロトコル"}, {"word_clean": "POP", "meaning": "受け取ったメールをダウンロードさせてくれるプロトコル"}, {"word_clean": "SMTP", "meaning": "メールサーバに向けてメールを送るプロトコル"}, {"word_clean": "メーラ", "meaning": "電子メールのクライアントプログラム"}, {"word_clean": "メールアドレス", "meaning": "電子メールのアドレス"}, {"word_clean": "メールサーバ", "meaning": "メールのサーバプログラムで、メールを中継したり受け取る"}, {"word_clean": "メーリングリスト", "meaning": "メールやその返信をグループの人に自動的に転送する仕組み"}, {"word_clean": "Webサーバ", "meaning": "Webのサービスを提供するサーバ"}, {"word_clean": "HTTP", "meaning": "Webページを取り寄せるのに使うプロトコル"}, {"word_clean": "Cookie", "meaning": "サーバがサイトに付随してブラウザに覚えさせ、おなじサイトのページを読むと取り出せるデータ"}, {"word_clean": "URL", "meaning": "WWW上のページ等に対応するアドレス"}, {"word_clean": "プロキシサーバ", "meaning": "インターネットに直接つながらないマシンの代理としてWebアクセスし結果を中継するサーバ"}, {"word_clean": "キーワード検索", "meaning": "単語をキーとして検索を行うこと"}, {"word_clean": "ハイパテキスト", "meaning": "テキストの中に他のテキストに対する参照が互いに埋め込まれたもの"}, {"word_clean": "クローラ", "meaning": "Webページを次々にたどってそれらの情報を集めるプログラム"}, {"word_clean": "SSL/TLS", "meaning": "暗号化プロトコルSSLとTLSを併せて呼ぶ言い方。これらはドメイン名の証明の機能も持つ"}, {"word_clean": "SSL", "meaning": "Secure Sockets Layer、Webのブラウザとサーバの間の通信を暗号化するプロトコルの旧版"}, {"word_clean": "TLS", "meaning": "Transport Layer Security、Webのブラウザとサーバの間の通信を暗号化するプロトコル"}, {"word_clean": "HTTPS", "meaning": "HTTPのかわりにHTTPSとすると、ブラウザがTLSを使うようになる"}, {"word_clean": "データベース", "meaning": "大量のデータを体系的に整理し、容易に共用・再利用できるようにしたもの"}, {"word_clean": "DBMS", "meaning": "データベースの機能を実現しているソフトウェア"}, {"word_clean": "構造化されたデータ", "meaning": "データの形が一定の規則に従っているもの"}, {"word_clean": "データモデル", "meaning": "データベースが提供している構造化の枠組み"}, {"word_clean": "リカバリ", "meaning": "システム障害などの後、投入されたデータが失われないように復元すること"}, {"word_clean": "バックアップ", "meaning": "データがあとでそっくり復元できるよう、コピーをとること"}, {"word_clean": "オープンデータ", "meaning": "コンピュータで利用可能なデータ形式で、二次利用が可能なルールで公開されたデータ"}, {"word_clean": "キー・バリュー形式", "meaning": "キーとバリューを合わせたレコードの集まりというデータモデル"}, {"word_clean": "NoSQL", "meaning": "RDBでは対応できない柔軟性や高性能に対応したデータベース"}, {"word_clean": "RDB", "meaning": "データモデルに関係モデルを採用したデータベース"}, {"word_clean": "主キー", "meaning": "レコードの識別に最も好ましい項目"}, {"word_clean": "結合", "meaning": "RDBにおいて複数のリレーション(表)を結びつける操作"}, {"word_clean": "射影", "meaning": "RDBにおいて1つのリレーション(表)のいくつかのフィールドを取り出す操作"}, {"word_clean": "SQL", "meaning": "RDBの操作を記述する言語"}, {"word_clean": "情報システム", "meaning": "情報を主に扱うシステム"}, {"word_clean": "GPS", "meaning": "全地球即位システム。複数の人工衛星の電波を用いて自分の現在位置がわかる"}, {"word_clean": "POS", "meaning": "販売時点情報管理システム。販売時点で売れた商品や金額等を記録し在庫管理等に役立てる"}, {"word_clean": "ATM", "meaning": "現金自動預け入れ払い出し機。銀行等で人が対応しなくても入出金ができる"}, {"word_clean": "サービス", "meaning": "要求に応じて情報やその他の利便性を提供するもの"}, {"word_clean": "代表値", "meaning": "データ全体の様子を一つの数値で代表させて表す値"}, {"word_clean": "モード", "meaning": "その値が起こる頻度が最も高い値のこと"}, {"word_clean": "メジアン", "meaning": "データを昇順もしくは降順に並べた上で中央の順位に位置する値のこと"}, {"word_clean": "四分位数", "meaning": "データを小さい順に並び替えたときに、データの数で4等分した時の区切り値のこと"}, {"word_clean": "第1四分位数", "meaning": "小さい方から25パーセントのデータを含む値"}, {"word_clean": "第2四分位数", "meaning": "小さい方から50パーセントのデータを含む値。中央値"}, {"word_clean": "第3四分位数", "meaning": "小さい方から75パーセントのデータを含む値"}, {"word_clean": "単純集計", "meaning": "アンケート調査等による回答データを設問ごとに集計すること"}, {"word_clean": "クロス集計", "meaning": "アンケート調査等による回答データを設問をかけ合せて集計すること"}, {"word_clean": "相関関係", "meaning": "ある要素とある要素が互いに関係し合っていること"}, {"word_clean": "散布図", "meaning": "横軸と縦軸にそれぞれ別の量をとりデータが当てはまるところに点を打って示すグラフ"}, {"word_clean": "相関係数", "meaning": "2つの変量の直線的な関係(比例関係)の強さを1 から−1 の間の数で表す"}, {"word_clean": "相関", "meaning": "一方が増加すると他方が増加または減少する関係"}, {"word_clean": "正の相関", "meaning": "一方が増加すると他方が増加する関係"}, {"word_clean": "負の相関", "meaning": "一方が増加すると他方が減少する関係"}, {"word_clean": "相関なし", "meaning": "一方の増加や減少が他方に影響を与えないこと"}, {"word_clean": "因果関係", "meaning": "原因とそれによって生じる結果との関係"}, {"word_clean": "交絡因子", "meaning": "調べようとする因子以外の因子で結果に影響を与えるもの"}, {"word_clean": "データサイエンス", "meaning": "統計学・機械学習・AIを活用し、予測モデルや自動化プロセスを構築こと"}, {"word_clean": "データクレンジング", "meaning": "データの誤記や未入力・重複などの不備を修正しデータの正確性を高める作業"}, {"word_clean": "CSV", "meaning": "Comma Separated Values。各項目がカンマで区切られたテキストデータ"}, {"word_clean": "テキストマイニング", "meaning": "大量のテキストデータから有益な情報を取り出すこと"}, {"word_clean": "量的データ", "meaning": "数値あらわされ数字の大小に意味をもつデータ"}, {"word_clean": "質的データ", "meaning": "量的データでないデータ"}, {"word_clean": "尺度", "meaning": "ものごとを評価するための基準"}, {"word_clean": "尺度水準", "meaning": "データをそれが表現する情報の性質に基づき分類する基準"}, {"word_clean": "比例尺度", "meaning": "数値は0点に意味をもち、比率にも意味がある"}, {"word_clean": "順序尺度", "meaning": "数値は順番付のための番号付で、何番目という意味のみ持つ"}, {"word_clean": "間隔尺度", "meaning": "数値は差が等しければ違いが等しいという意味がある"}, {"word_clean": "名義尺度", "meaning": "単なる区別のための番号付けで、数値の大小に意味はない"}, {"word_clean": "回帰分析", "meaning": "ある結果に、関連する要因がどのくらい影響するかを関数の形で明らかにする統計手法"}, {"word_clean": "回帰直線", "meaning": "回帰分析の結果を散布図上に直線で表したもの"}, {"word_clean": "仮説検定", "meaning": "確率をもとに結論を導く方法"}, {"word_clean": "帰無仮説", "meaning": "棄却したい仮説で、これが棄却されれば「得られた結果は偶然ではない」といえる"}, {"word_clean": "t検定", "meaning": "t分布を利用する検定法の総称で、母集団の分散が不明でも使える"}, {"word_clean": "有意水準", "meaning": "帰無仮説を棄却する基準となる確率"}, {"word_clean": "異常値", "meaning": "他の測定値から外れた正常でない値"}, {"word_clean": "外れ値", "meaning": "他の測定値から外れた値"}, {"word_clean": "欠損値", "meaning": "特定の変数が何かしらの理由で欠落していること"}, {"word_clean": "度数分布表", "meaning": "各階級に属するものの個数がどのように散らばっているかを示す表"}, {"word_clean": "正規分布", "meaning": "統計学の多くの場面で使われる左右対称で釣鐘型の連続型確率分布"}, {"word_clean": "偏差値", "meaning": "データの値を、平均50、標準偏差10のデータに変換(標準化)した値"}, {"word_clean": "フィールドワーク", "meaning": "フィールド(研究対象の現地)を訪れ、直接観察したり話を聞いて研究を進めること"}, {"word_clean": "全数調査", "meaning": "対象となるものを全て調べる調査"}, {"word_clean": "標本調査", "meaning": "母集団の一部を抽出して調べる調査"}, {"word_clean": "正規化", "meaning": "データのスケールを扱いやすいものに整えること"}, {"word_clean": "抽出", "meaning": "母集団から無作為に一部を選び出すこと"}, {"word_clean": "箱ひげ図", "meaning": "データのばらつき具合を示すのに用いる図で、最大・最小・第1〜3四分位数が読み取れる"}, {"word_clean": "キーワード", "meaning": "(1) 注目すべき語 (2) 単語を使用した検索やパラメタ"}, {"word_clean": "さくいん", "meaning": "(1) 本の末尾にある語と出現ページの表 (2) 単語の辞書 (3)プログラミング言語で配列などの要素を特定する数。添字。"}, {"word_clean": "構造化されていないデータ", "meaning": "旧来のデータベースのように構造化されていないデータ"}, {"word_clean": "表計算ソフト", "meaning": "Excelに代表される、縦横に並んだセルにデータや数式を打ち込み自動処理を行うソフト"}, {"word_clean": "行", "meaning": "横方向のセルの集まり"}, {"word_clean": "列", "meaning": "縦方向のセルの集まり"}, {"word_clean": "相対参照", "meaning": "縦又は横方向に現在位置からいくつプラス(マイナス)のセルという参照方法"}, {"word_clean": "絶対参照", "meaning": "現在位置に関係なくどのセルという参照方法"}, {"word_clean": "オートフィル", "meaning": "連続した番号や日付等を並んだセルに一度に入力する操作"}, {"word_clean": "AVERAGE", "meaning": "平均値を計算する表計算関数"}, {"word_clean": "CORREL", "meaning": "相関係数を計算する表計算関数"}, {"word_clean": "COUNTIF", "meaning": "条件を満たすセルの個数を計算する表計算関数"}, {"word_clean": "MAX", "meaning": "最大値を計算する表計算関数"}, {"word_clean": "MEDIAN", "meaning": "中央値を計算する表計算関数"}, {"word_clean": "MIN", "meaning": "最小値を計算する表計算関数"}, {"word_clean": "STDEV.P", "meaning": "標準偏差を計算する表計算関数"}, {"word_clean": "SUM", "meaning": "合計を計算する表計算関数"}, {"word_clean": "VAR.P", "meaning": "分散を計算する表計算関数"}, {"word_clean": "SDGs", "meaning": "Sustainable Development Goals (持続可能な開発目標)。2016〜2030の15年間で達成すべき世界共通目標"}, {"word_clean": "参考文献", "meaning": "論文やレポートを執筆するにあたって論拠とした文献"}, {"word_clean": "スマートフォン", "meaning": "タッチパネルで操作できるPCに近い作りの携帯電話"}, {"word_clean": "テキストエディタ", "meaning": "テキストファイルを作成・編集するソフト"}, {"word_clean": "文書作成ソフト", "meaning": "書式やフォントも含めた文書ファイルを作成・編集するソフト"}, {"word_clean": "ひな型", "meaning": "頻繁に使用するパターンをあらかじめ用意しているもの"}, {"word_clean": "フィードバック", "meaning": "(1) 相手の行動に対して改善点や評価を伝えること (2) 出力の一部を入力に戻すこと"}, {"word_clean": "知識", "meaning": "ある事柄について、いろいろと知ることや、その知りえた内容"}, {"word_clean": "評価", "meaning": "(1)どれだけの価値等があるかを見定めること (2)プログラミング言語で実行して値や結果を求めること"}, {"word_clean": "問題", "meaning": "(1) 解答を求める問い (2) 解決すべき事柄・課題"}, {"word_clean": "トレードオフ", "meaning": "一方を立てれば他方がまずくなるといった、二つものの間の関係"}, {"word_clean": "検索", "meaning": "蓄えられているものから必要な情報をさがし出すこと"}, {"word_clean": "コード", "meaning": "(1) 文字に対して割り振った番号ないしビット列 (2)プログラムの断片"}, {"word_clean": "可視化", "meaning": "(1)目に見えないデータなどを見やすい状態にすること (2)絵や図やグラフにして分かりやすくすること"}, {"word_clean": "階層構造", "meaning": "(1) 事象や認識対象の構造が下層から上層へと順 に積み重ねて構成されるること (2) 木構造"}, {"word_clean": "構造化", "meaning": "(1)事象や物事などの全体を定義した上での構成要素とその関係を整理すること (2)プログラムを関数や制御構造を用いて整理すること"}, {"word_clean": "信頼性", "meaning": "(1)信頼できる度合い (2)機器・システムなどが誤動作や故障しにくいこと"}, {"word_clean": "抽象化", "meaning": "(1) 対象から注目すべき要素を抜き出し他は捨てること (2) 具体的なものを形のない概念に置き換える"}];
+
+/* ================================================================
+   出席番号・成績管理
+   ================================================================ */
+const ADMIN_PASS  = "12345";
+const STORAGE_KEY = "jyoho_quiz_results";
+const GAS_KEY     = "jyoho_gas_url";
+const GAS_DEFAULT = "https://script.google.com/macros/s/AKfycbzBnYgUFCM54WAmsf31pGuFjFvarEp4o2O0Ifw8W-2mOZYRPzbX5e2pJvrpPJasCo6j/exec";
+
+let currentStudent = null;
+
+function getResults() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; }
+}
+function saveResults(data) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
+}
+
+// ---- 出席番号選択 ----
+function buildStudentSelect() {
+  const grid = document.getElementById("ss-grid");
+  grid.innerHTML = "";
+  const results = getResults();
+  for (let i = 1; i <= 25; i++) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ss-btn" + (results[i] ? " done" : "");
+    btn.textContent = i;
+    if (results[i]) {
+      const last = results[i][results[i].length - 1];
+      btn.title = "受験済（" + last.score + "/" + last.total + "点）";
+    }
+    btn.onclick = () => selectStudent(i);
+    grid.appendChild(btn);
+  }
+}
+
+function selectStudent(n) {
+  currentStudent = n;
+  document.querySelectorAll(".ss-btn").forEach((b, i) => {
+    b.classList.toggle("sel", i + 1 === n);
+  });
+  document.getElementById("ss-start-btn").disabled = false;
+}
+
+function startQuiz() {
+  if (!currentStudent) return;
+  document.getElementById("ss-wrap").style.display = "none";
+  document.getElementById("quiz-wrap").style.display = "block";
+  document.getElementById("student-badge").textContent = "出席番号 " + currentStudent + " 番";
+  initQuiz();
+}
+
+function backToSelect() {
+  document.getElementById("quiz-wrap").style.display = "none";
+  document.getElementById("ss-wrap").style.display  = "block";
+  buildStudentSelect();
+}
+
+// ---- 管理者 ----
+function showAdmin() {
+  document.getElementById("ss-wrap").style.display    = "none";
+  document.getElementById("quiz-wrap").style.display  = "none";
+  document.getElementById("admin-wrap").style.display = "block";
+  document.getElementById("adm-pass-inp").value = "";
+  document.getElementById("adm-err").style.display     = "none";
+  document.getElementById("adm-content").style.display = "none";
+  document.getElementById("adm-lock").style.display    = "block";
+}
+
+function hideAdmin() {
+  document.getElementById("admin-wrap").style.display = "none";
+  document.getElementById("ss-wrap").style.display    = "block";
+}
+
+function unlockAdmin() {
+  const v = document.getElementById("adm-pass-inp").value;
+  if (v === ADMIN_PASS) {
+    document.getElementById("adm-lock").style.display    = "none";
+    document.getElementById("adm-content").style.display = "block";
+    const savedUrl = getGasUrl();
+    if (savedUrl) document.getElementById("gas-url-input").value = savedUrl;
+    renderAdminTable();
+  } else {
+    document.getElementById("adm-err").style.display = "block";
+  }
+}
+
+function renderAdminTable() {
+  const results = getResults();
+  const tbl = document.getElementById("adm-tbl");
+  let html = `<thead><tr>
+    <th>出席番号</th><th>受験回数</th><th>最新正答率</th><th>平均正答率</th><th>最新の間違い（正答→選択）</th>
+  </tr></thead><tbody>`;
+  for (let i = 1; i <= 25; i++) {
+    const records = results[i] || [];
+    if (records.length === 0) {
+      html += `<tr><td>${i}番</td><td colspan="4" style="color:#aaa;font-size:12px;">未受験</td></tr>`;
+      continue;
+    }
+    const latest  = records[records.length - 1];
+    const avgPct  = Math.round(records.reduce((s, r) => s + r.pct, 0) / records.length);
+    const pct     = latest.pct;
+    const color   = pct >= 80 ? "#639922" : pct >= 60 ? "#D97706" : "#A32D2D";
+    const wrongHtml = latest.wrong.length === 0
+      ? '<span style="color:#639922;font-size:12px;">全問正解！</span>'
+      : '<div class="wrong-txt">' + latest.wrong.map(w =>
+          `<b>${esc(w.correct)}</b> → ${esc(w.chosen)}<br><span style="color:#888;font-size:10px;">${esc(w.meaning)}</span>`
+        ).join('<br>') + '</div>';
+    html += `<tr>
+      <td style="font-weight:500;">${i}番</td>
+      <td style="text-align:center;">${records.length}回</td>
+      <td>
+        <span style="font-weight:500;color:${color};">${pct}%</span>
+        <span style="font-size:11px;color:#888;"> (${latest.score}/${latest.total})</span><br>
+        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${color};"></div></div>
+      </td>
+      <td style="text-align:center;color:#6b6b68;">${avgPct}%</td>
+      <td>${wrongHtml}</td>
+    </tr>`;
+  }
+  html += "</tbody>";
+  tbl.innerHTML = html;
+}
+
+function exportCSV() {
+  const results = getResults();
+  const rows = [["出席番号","受験回数","最新正答率(%)","平均正答率(%)","最新の間違い（正答→選択）"]];
+  for (let i = 1; i <= 25; i++) {
+    const records = results[i] || [];
+    if (records.length === 0) { rows.push([i+"番","0","","",""]); continue; }
+    const latest  = records[records.length - 1];
+    const avgPct  = Math.round(records.reduce((s,r) => s + r.pct, 0) / records.length);
+    const wrongStr = latest.wrong.map(w => w.correct + "→" + w.chosen).join(" / ");
+    rows.push([i+"番", records.length, latest.pct, avgPct, wrongStr]);
+  }
+  const csv  = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(",")).join("\n");
+  const blob = new Blob([new Uint8Array([0xEF,0xBB,0xBF]), csv], {type:"text/csv"});
+  const a    = document.createElement("a");
+  a.href     = URL.createObjectURL(blob);
+  a.download = "情報クイズ結果_" + new Date().toLocaleDateString("ja-JP").replace(/\//g,"-") + ".csv";
+  a.click();
+}
+
+function clearData() {
+  if (confirm("全員の成績データを削除しますか？")) {
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    renderAdminTable();
+  }
+}
+
+// ---- 結果保存 ----
+function saveStudentResult(score, total, wrongItems) {
+  if (!currentStudent) return;
+  const results = getResults();
+  if (!results[currentStudent]) results[currentStudent] = [];
+  const record = {
+    date:  new Date().toLocaleString("ja-JP"),
+    score, total,
+    pct:   Math.round(score / total * 100),
+    wrong: wrongItems
+  };
+  results[currentStudent].push(record);
+  saveResults(results);
+
+  sendToGas({
+    student: currentStudent + "番",
+    score, total,
+    pct:   record.pct,
+    date:  record.date,
+    wrong: wrongItems.map(w => w.correct + "→" + w.chosen + "（" + w.meaning + "）")
+  }).catch(() => {});
+}
+
+/* ================================================================
+   GAS連携
+   ================================================================ */
+function getGasUrl() {
+  try { return localStorage.getItem(GAS_KEY) || GAS_DEFAULT; } catch { return GAS_DEFAULT; }
+}
+function saveGasUrl() {
+  const url = document.getElementById("gas-url-input").value.trim();
+  try { localStorage.setItem(GAS_KEY, url); } catch {}
+  const st = document.getElementById("gas-status");
+  st.style.color   = "#639922";
+  st.textContent   = url ? "✅ URLを保存しました" : "URLを削除しました";
+}
+function testGasUrl() {
+  const url = getGasUrl();
+  const st  = document.getElementById("gas-status");
+  if (!url) { st.style.color="#A32D2D"; st.textContent="⚠️ URLが設定されていません"; return; }
+  st.style.color="#6b6b68"; st.textContent="送信中...";
+  sendToGas({ student:"テスト", score:20, total:20, pct:100, date:new Date().toLocaleString("ja-JP"), wrong:[] })
+    .then(() => { st.style.color="#639922"; st.textContent="✅ テスト送信成功！スプレッドシートを確認してください"; })
+    .catch(e  => { st.style.color="#A32D2D"; st.textContent="❌ 送信失敗：" + e.message; });
+}
+function sendToGas(data) {
+  const url = getGasUrl();
+  if (!url) return Promise.resolve();
+  return fetch(url, {
+    method: "POST",
+    mode:   "no-cors",
+    headers: { "Content-Type": "application/json" },
+    body:   JSON.stringify(data)
+  });
+}
+
+/* ================================================================
+   クイズロジック
+   ================================================================ */
+const QUIZ_SIZE = 20;
+let quizQ = [], current = 0, selectedAns = [], answeredArr = [];
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function initQuiz() {
+  const pool = shuffle(VOCAB).slice(0, QUIZ_SIZE);
+  quizQ = pool.map(q => {
+    const others  = VOCAB.filter(w => w.word_clean !== q.word_clean);
+    const choices = shuffle([q, ...shuffle(others).slice(0, 4)]);
+    return { q, choices };
+  });
+  current     = 0;
+  selectedAns = new Array(QUIZ_SIZE).fill(null);
+  answeredArr = new Array(QUIZ_SIZE).fill(false);
+  document.getElementById("nav-row").style.display = "none";
+  document.getElementById("prog").style.width = (1 / QUIZ_SIZE * 100) + "%";
+  renderQuiz();
+}
+
+function renderQuiz() {
+  const { q, choices } = quizQ[current];
+  const isAns = answeredArr[current];
+  const sel   = selectedAns[current];
+
+  document.getElementById("prog").style.width    = ((current + 1) / QUIZ_SIZE * 100) + "%";
+  document.getElementById("q-counter").textContent = (current + 1) + " / " + QUIZ_SIZE;
+
+  const choicesHTML = choices.map(c => {
+    let cls = "choice-btn";
+    if (isAns) {
+      cls += " disabled";
+      if (c.word_clean === q.word_clean)   cls += " correct";
+      else if (c.word_clean === sel) cls += " wrong";
+    }
+    const safeVal = c.word_clean.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    return `<button class="${cls}" onclick="choose('${safeVal}')">${esc(c.word_clean)}</button>`;
+  }).join("");
+
+  const fbHTML = isAns
+    ? `<div class="feedback show ${sel === q.word_clean ? 'correct' : 'wrong'}">
+        ${sel === q.word_clean
+          ? '✅ 正解！　<b>' + esc(q.word_clean) + '</b>'
+          : '❌ 不正解。正解は <b>' + esc(q.word_clean) + '</b>（あなたの答え：' + esc(sel) + '）'}
+       </div>`
+    : '<div class="feedback"></div>';
+
+  const isLast = current === QUIZ_SIZE - 1;
+  document.getElementById("quiz-body").innerHTML = `
+    <div class="card">
+      <div class="q-num">問題 ${current + 1} / ${QUIZ_SIZE}</div>
+      <div class="q-meaning">${esc(q.meaning)}</div>
+      <div class="choices-5">${choicesHTML}</div>
+      ${fbHTML}
+    </div>`;
+
+  // ナビ
+  const navRow = document.getElementById("nav-row");
+  const nextBtn = document.getElementById("next-btn");
+  if (isAns) {
+    navRow.style.display  = "flex";
+    nextBtn.textContent   = isLast ? "結果を見る →" : "次へ →";
+    nextBtn.disabled      = false;
+  } else {
+    navRow.style.display = "none";
+  }
+}
+
+function choose(val) {
+  if (answeredArr[current]) return;
+  selectedAns[current]  = val;
+  answeredArr[current]  = true;
+  renderQuiz();
+}
+
+function nextQ() {
+  if (current === QUIZ_SIZE - 1) { showResult(); return; }
+  current++;
+  renderQuiz();
+}
+
+function showResult() {
+  let score = 0;
+  const wrongItems = [];
+  quizQ.forEach(({ q }, i) => {
+    const ok = selectedAns[i] === q.word_clean;
+    if (ok) score++;
+    else wrongItems.push({ meaning: q.meaning, correct: q.word_clean, chosen: selectedAns[i] || "未回答" });
+  });
+  const pct = Math.round(score / QUIZ_SIZE * 100);
+
+  saveStudentResult(score, QUIZ_SIZE, wrongItems);
+
+  const msg = pct === 100 ? "🎉 満点です！素晴らしい！全問正解、完璧です！"
+    : pct >= 80 ? "👏 よくできました！あと少しで満点です。"
+    : pct >= 60 ? "📚 まあまあです。間違えた問題を復習しましょう。"
+    : "💪 もう一度チャレンジしてみましょう！";
+
+  document.getElementById("nav-row").style.display = "none";
+  document.getElementById("prog").style.width = "100%";
+
+  const reviewH = quizQ.map(({ q }, i) => {
+    const ok  = selectedAns[i] === q.word_clean;
+    const ans = ok
+      ? `<span class="ans-correct">${esc(q.word_clean)}</span>`
+      : `<span class="ans-correct">${esc(q.word_clean)}</span> <span class="ans-wrong">（あなたの答え: ${esc(selectedAns[i] || "未回答")}）</span>`;
+    return `<div class="review-item">
+      <div class="review-row">
+        <span class="mark ${ok ? 'ok' : 'ng'}">${ok ? '○' : '×'}</span>
+        <span><b>問${i + 1}.</b> ${esc(q.meaning)}　→　${ans}</span>
+      </div>
+    </div>`;
+  }).join("");
+
+  document.getElementById("quiz-body").innerHTML = `
+    <div class="result-card">
+      <div class="score-big">${score}<span class="score-denom"> / ${QUIZ_SIZE}</span></div>
+      <div class="score-pct">正解率 ${pct}%</div>
+      <div class="score-msg">${msg}</div>
+      <div class="review-list">${reviewH}</div><br>
+      <button class="btn primary restart-btn" onclick="initQuiz()">もう一度挑戦する（問題をランダムに変更）</button>
+      <button class="btn restart-btn" onclick="backToSelect()" style="margin-left:8px;">出席番号選択に戻る</button>
+      <div class="sync-note" id="sync-note"></div>
+    </div>`;
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
+/* ================================================================
+   初期化
+   ================================================================ */
+buildStudentSelect();
+</script>
+</body>
+</html>
