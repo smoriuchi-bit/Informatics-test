@@ -26,10 +26,19 @@
 
   /* ===== 出席番号選択 ===== */
   .ss-title { font-size: 20px; font-weight: 500; margin-bottom: 6px; }
-  .ss-sub   { font-size: 13px; color: #6b6b68; margin-bottom: 1.5rem; }
-  .ss-grid  { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 1.5rem; }
+  .ss-sub   { font-size: 13px; color: #6b6b68; margin-bottom: 1.25rem; }
+  .ss-section { margin-bottom: 1.25rem; }
+  .ss-label { font-size: 12px; font-weight: 500; color: #6b6b68; letter-spacing: 0.05em; margin-bottom: 7px; }
+  .ss-row   { display: flex; gap: 7px; flex-wrap: wrap; }
+  .ss-sm-btn { background: #fff; border: 0.5px solid #dddcd6; border-radius: 8px;
+               padding: 9px 14px; font-size: 14px; font-weight: 500; color: #1a1a18;
+               cursor: pointer; text-align: center; transition: all 0.15s; font-family: inherit; min-width: 46px; }
+  .ss-sm-btn:hover { background: #EBF3FC; border-color: #378ADD; color: #378ADD; }
+  .ss-sm-btn.sel   { background: #378ADD; border-color: #378ADD; color: #fff; }
+  .ss-section.locked { opacity: 0.35; pointer-events: none; }
+  .ss-grid  { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; margin-bottom: 1.25rem; }
   .ss-btn   { background: #fff; border: 0.5px solid #dddcd6; border-radius: 8px;
-              padding: 14px 0; font-size: 16px; font-weight: 500; color: #1a1a18;
+              padding: 12px 0; font-size: 15px; font-weight: 500; color: #1a1a18;
               cursor: pointer; text-align: center; transition: all 0.15s; font-family: inherit; }
   .ss-btn:hover  { background: #EBF3FC; border-color: #378ADD; color: #378ADD; }
   .ss-btn.sel    { background: #378ADD; border-color: #378ADD; color: #fff; }
@@ -112,10 +121,24 @@
 <div id="ss-wrap" class="wrap">
   <div class="quiz-header">
     <div class="ss-title">情報科 単語クイズ</div>
-    <div class="ss-sub">出席番号を選んでからスタートしてください（5択・全20問）</div>
+    <div class="ss-sub">学年・クラス・出席番号を選んでスタートしてください（5択・全20問）</div>
   </div>
   <div class="card">
-    <div class="ss-grid" id="ss-grid"></div>
+    <!-- ① 学年 -->
+    <div class="ss-section" id="sec-grade">
+      <div class="ss-label">① 学年</div>
+      <div class="ss-row" id="grade-row"></div>
+    </div>
+    <!-- ② クラス -->
+    <div class="ss-section locked" id="sec-class">
+      <div class="ss-label">② クラス</div>
+      <div class="ss-row" id="class-row"></div>
+    </div>
+    <!-- ③ 出席番号 -->
+    <div class="ss-section locked" id="sec-num">
+      <div class="ss-label">③ 出席番号</div>
+      <div class="ss-grid" id="ss-grid"></div>
+    </div>
     <button class="btn primary ss-start" id="ss-start-btn" onclick="startQuiz()" disabled>スタート →</button>
   </div>
   <div style="text-align:right; margin-top:10px;">
@@ -127,7 +150,7 @@
 <div id="quiz-wrap" class="wrap" style="display:none;">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
     <span id="student-badge" style="font-size:13px;font-weight:500;color:#378ADD;"></span>
-    <button style="background:none;border:none;font-size:12px;color:#888780;cursor:pointer;font-family:inherit;" onclick="backToSelect()">← 出席番号選択に戻る</button>
+    <button style="background:none;border:none;font-size:12px;color:#888780;cursor:pointer;font-family:inherit;" onclick="backToSelect()">← 選択画面に戻る</button>
   </div>
   <div class="progress-bg"><div class="progress-fill" id="prog" style="width:5%"></div></div>
   <div id="quiz-body"></div>
@@ -189,6 +212,8 @@ const GAS_KEY     = "jyoho_gas_url";
 const GAS_DEFAULT = "https://script.google.com/macros/s/AKfycbwRhtPVWi5pbY7zL9laCngGjYdJAIAizvmtmRBZM81TKePdu98-LTdteK-9UjMOKUOb/exec";
 
 let currentStudent = null;
+let currentGrade   = null;
+let currentClass   = null;
 
 function getResults() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; }
@@ -196,19 +221,48 @@ function getResults() {
 function saveResults(data) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
 }
+function makeKey(g, c, n) { return g + "-" + c + "-" + n; }
+function labelOf(g, c, n) { return g + "年 " + c + "組 " + n + "番"; }
 
-// ---- 出席番号選択 ----
+// ---- 学年・クラス・出席番号選択 ----
 function buildStudentSelect() {
+  // 学年ボタン
+  const gradeRow = document.getElementById("grade-row");
+  gradeRow.innerHTML = "";
+  [1,2,3].forEach(g => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ss-sm-btn" + (currentGrade === g ? " sel" : "");
+    btn.textContent = g + "年";
+    btn.onclick = () => selectGrade(g);
+    gradeRow.appendChild(btn);
+  });
+
+  // クラスボタン
+  const classRow = document.getElementById("class-row");
+  classRow.innerHTML = "";
+  ["01","02","03","04","05","06","07","08"].forEach(c => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ss-sm-btn" + (currentClass === c ? " sel" : "");
+    btn.textContent = c + "組";
+    btn.onclick = () => selectClass(c);
+    classRow.appendChild(btn);
+  });
+
+  // 出席番号ボタン
   const grid = document.getElementById("ss-grid");
   grid.innerHTML = "";
   const results = getResults();
-  for (let i = 1; i <= 25; i++) {
+  for (let i = 1; i <= 30; i++) {
+    const key = currentGrade && currentClass ? makeKey(currentGrade, currentClass, i) : null;
+    const rec = key ? results[key] : null;
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "ss-btn" + (results[i] ? " done" : "");
+    btn.className = "ss-btn" + (rec ? " done" : "") + (currentStudent === i ? " sel" : "");
     btn.textContent = i;
-    if (results[i]) {
-      const last = results[i][results[i].length - 1];
+    if (rec) {
+      const last = rec[rec.length - 1];
       btn.title = "受験済（" + last.score + "/" + last.total + "点）";
     }
     btn.onclick = () => selectStudent(i);
@@ -216,7 +270,26 @@ function buildStudentSelect() {
   }
 }
 
+function selectGrade(g) {
+  currentGrade   = g;
+  currentClass   = null;
+  currentStudent = null;
+  document.getElementById("sec-class").classList.remove("locked");
+  document.getElementById("sec-num").classList.add("locked");
+  document.getElementById("ss-start-btn").disabled = true;
+  buildStudentSelect();
+}
+
+function selectClass(c) {
+  currentClass   = c;
+  currentStudent = null;
+  document.getElementById("sec-num").classList.remove("locked");
+  document.getElementById("ss-start-btn").disabled = true;
+  buildStudentSelect();
+}
+
 function selectStudent(n) {
+  if (!currentGrade || !currentClass) return;
   currentStudent = n;
   document.querySelectorAll(".ss-btn").forEach((b, i) => {
     b.classList.toggle("sel", i + 1 === n);
@@ -225,10 +298,10 @@ function selectStudent(n) {
 }
 
 function startQuiz() {
-  if (!currentStudent) return;
+  if (!currentGrade || !currentClass || !currentStudent) return;
   document.getElementById("ss-wrap").style.display = "none";
   document.getElementById("quiz-wrap").style.display = "block";
-  document.getElementById("student-badge").textContent = "出席番号 " + currentStudent + " 番";
+  document.getElementById("student-badge").textContent = labelOf(currentGrade, currentClass, currentStudent);
   initQuiz();
 }
 
@@ -271,49 +344,66 @@ function renderAdminTable() {
   const results = getResults();
   const tbl = document.getElementById("adm-tbl");
   let html = `<thead><tr>
-    <th>出席番号</th><th>受験回数</th><th>最新正答率</th><th>平均正答率</th><th>最新の間違い（正答→選択）</th>
+    <th>学年</th><th>クラス</th><th>出席番号</th><th>受験回数</th><th>最新正答率</th><th>平均正答率</th><th>最新の間違い（正答→選択）</th>
   </tr></thead><tbody>`;
-  for (let i = 1; i <= 25; i++) {
-    const records = results[i] || [];
-    if (records.length === 0) {
-      html += `<tr><td>${i}番</td><td colspan="4" style="color:#aaa;font-size:12px;">未受験</td></tr>`;
-      continue;
+
+  // 全キーをソートして表示
+  const allKeys = Object.keys(results).sort((a, b) => {
+    const [ag,ac,an] = a.split("-"); const [bg,bc,bn] = b.split("-");
+    return ag-bg || ac.localeCompare(bc) || an-bn;
+  });
+
+  for (let g = 1; g <= 3; g++) {
+    for (const c of ["01","02","03","04","05","06","07","08"]) {
+      for (let n = 1; n <= 30; n++) {
+        const key = makeKey(g, c, n);
+        const records = results[key] || [];
+        if (records.length === 0) continue;
+        const latest = records[records.length - 1];
+        const avgPct = Math.round(records.reduce((s, r) => s + r.pct, 0) / records.length);
+        const pct    = latest.pct;
+        const color  = pct >= 80 ? "#639922" : pct >= 60 ? "#D97706" : "#A32D2D";
+        const wrongHtml = latest.wrong.length === 0
+          ? '<span style="color:#639922;font-size:12px;">全問正解！</span>'
+          : '<div class="wrong-txt">' + latest.wrong.map(w =>
+              `<b>${esc(w.correct)}</b> → ${esc(w.chosen)}<br><span style="color:#888;font-size:10px;">${esc(w.meaning)}</span>`
+            ).join('<br>') + '</div>';
+        html += `<tr>
+          <td style="text-align:center;">${g}年</td>
+          <td style="text-align:center;">${c}組</td>
+          <td style="text-align:center;font-weight:500;">${n}番</td>
+          <td style="text-align:center;">${records.length}回</td>
+          <td>
+            <span style="font-weight:500;color:${color};">${pct}%</span>
+            <span style="font-size:11px;color:#888;"> (${latest.score}/${latest.total})</span><br>
+            <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${color};"></div></div>
+          </td>
+          <td style="text-align:center;color:#6b6b68;">${avgPct}%</td>
+          <td>${wrongHtml}</td>
+        </tr>`;
+      }
     }
-    const latest  = records[records.length - 1];
-    const avgPct  = Math.round(records.reduce((s, r) => s + r.pct, 0) / records.length);
-    const pct     = latest.pct;
-    const color   = pct >= 80 ? "#639922" : pct >= 60 ? "#D97706" : "#A32D2D";
-    const wrongHtml = latest.wrong.length === 0
-      ? '<span style="color:#639922;font-size:12px;">全問正解！</span>'
-      : '<div class="wrong-txt">' + latest.wrong.map(w =>
-          `<b>${esc(w.correct)}</b> → ${esc(w.chosen)}<br><span style="color:#888;font-size:10px;">${esc(w.meaning)}</span>`
-        ).join('<br>') + '</div>';
-    html += `<tr>
-      <td style="font-weight:500;">${i}番</td>
-      <td style="text-align:center;">${records.length}回</td>
-      <td>
-        <span style="font-weight:500;color:${color};">${pct}%</span>
-        <span style="font-size:11px;color:#888;"> (${latest.score}/${latest.total})</span><br>
-        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${color};"></div></div>
-      </td>
-      <td style="text-align:center;color:#6b6b68;">${avgPct}%</td>
-      <td>${wrongHtml}</td>
-    </tr>`;
   }
+
+  if (allKeys.length === 0) html += '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:1rem;">まだ受験データがありません</td></tr>';
   html += "</tbody>";
   tbl.innerHTML = html;
 }
 
 function exportCSV() {
   const results = getResults();
-  const rows = [["出席番号","受験回数","最新正答率(%)","平均正答率(%)","最新の間違い（正答→選択）"]];
-  for (let i = 1; i <= 25; i++) {
-    const records = results[i] || [];
-    if (records.length === 0) { rows.push([i+"番","0","","",""]); continue; }
-    const latest  = records[records.length - 1];
-    const avgPct  = Math.round(records.reduce((s,r) => s + r.pct, 0) / records.length);
-    const wrongStr = latest.wrong.map(w => w.correct + "→" + w.chosen).join(" / ");
-    rows.push([i+"番", records.length, latest.pct, avgPct, wrongStr]);
+  const rows = [["学年","クラス","出席番号","受験回数","最新正答率(%)","平均正答率(%)","最新の間違い（正答→選択）"]];
+  for (let g = 1; g <= 3; g++) {
+    for (const c of ["01","02","03","04","05","06","07","08"]) {
+      for (let n = 1; n <= 30; n++) {
+        const records = results[makeKey(g,c,n)] || [];
+        if (records.length === 0) continue;
+        const latest  = records[records.length - 1];
+        const avgPct  = Math.round(records.reduce((s,r) => s + r.pct, 0) / records.length);
+        const wrongStr = latest.wrong.map(w => w.correct + "→" + w.chosen).join(" / ");
+        rows.push([g+"年", c+"組", n+"番", records.length, latest.pct, avgPct, wrongStr]);
+      }
+    }
   }
   const csv  = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(",")).join("\n");
   const blob = new Blob([new Uint8Array([0xEF,0xBB,0xBF]), csv], {type:"text/csv"});
@@ -332,20 +422,21 @@ function clearData() {
 
 // ---- 結果保存 ----
 function saveStudentResult(score, total, wrongItems) {
-  if (!currentStudent) return;
+  if (!currentGrade || !currentClass || !currentStudent) return;
   const results = getResults();
-  if (!results[currentStudent]) results[currentStudent] = [];
+  const key = makeKey(currentGrade, currentClass, currentStudent);
+  if (!results[key]) results[key] = [];
   const record = {
     date:  new Date().toLocaleString("ja-JP"),
     score, total,
     pct:   Math.round(score / total * 100),
     wrong: wrongItems
   };
-  results[currentStudent].push(record);
+  results[key].push(record);
   saveResults(results);
 
   sendToGas({
-    student: currentStudent + "番",
+    student: labelOf(currentGrade, currentClass, currentStudent),
     score, total,
     pct:   record.pct,
     date:  record.date,
